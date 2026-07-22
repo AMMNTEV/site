@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Регистрация</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/auth.css">
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -23,8 +24,8 @@
         <label>Тег</label>
         <div class="tag-input-wrapper">
           <span>@</span>
-          <input type="text" id="tag" placeholder="username" required 
-                 oninput="handleTagInput(this); checkTagUnique(this)" 
+          <input type="text" id="tag" placeholder="username" required
+                 oninput="handleTagInput(this); checkTagUnique(this)"
                  onkeydown="preventAtSymbolDeletion(event, this)">
         </div>
         <div id="tagStatus" class="tag-status"></div>
@@ -47,5 +48,106 @@
 
   <script src="js/firebase-config.js"></script>
   <script src="js/auth.js"></script>
+  <script>
+    let tagCheckTimeout = null;
+    let isTagAvailable = false;
+    let currentTagValue = '';
+
+    // Проверка уникальности тега (вызывается из oninput)
+    async function checkTagUnique(input) {
+      const tagValue = input.value.trim();
+      const tagStatus = document.getElementById('tagStatus');
+      const registerBtn = document.getElementById('registerBtn');
+
+      if (!tagValue) {
+        tagStatus.innerHTML = '';
+        tagStatus.className = 'tag-status';
+        isTagAvailable = false;
+        registerBtn.disabled = true;
+        return;
+      }
+      if (tagValue.length < 3) {
+        tagStatus.innerHTML = '⚠️ Минимум 3 символа';
+        tagStatus.className = 'tag-status unavailable';
+        isTagAvailable = false;
+        registerBtn.disabled = true;
+        return;
+      }
+
+      tagStatus.innerHTML = '⏳ Проверка...';
+      tagStatus.className = 'tag-status loading';
+      if (tagCheckTimeout) clearTimeout(tagCheckTimeout);
+      currentTagValue = tagValue;
+
+      tagCheckTimeout = setTimeout(async () => {
+        if (currentTagValue !== tagValue) return;
+        try {
+          const available = await checkTagUnique(tagValue);
+          if (available) {
+            tagStatus.innerHTML = '✅ Тег доступен';
+            tagStatus.className = 'tag-status available';
+            isTagAvailable = true;
+            registerBtn.disabled = false;
+          } else {
+            tagStatus.innerHTML = '❌ Этот тег уже занят';
+            tagStatus.className = 'tag-status unavailable';
+            isTagAvailable = false;
+            registerBtn.disabled = true;
+          }
+        } catch (error) {
+          console.error('Ошибка проверки тега:', error);
+          tagStatus.innerHTML = '❌ Ошибка проверки';
+          tagStatus.className = 'tag-status unavailable';
+          isTagAvailable = false;
+          registerBtn.disabled = true;
+        }
+      }, 500);
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!isTagAvailable) { alert('Пожалуйста, выберите другой тег'); return; }
+
+      const nickname = document.getElementById('nickname').value;
+      const tag = '@' + document.getElementById('tag').value.trim();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const registerBtn = document.getElementById('registerBtn');
+      const messageDiv = document.getElementById('message');
+
+      registerBtn.disabled = true;
+      registerBtn.textContent = 'Регистрация...';
+
+      try {
+        await register(email, password, nickname, tag);
+        messageDiv.innerHTML = `
+          <div class="success">
+            <h3>✅ Регистрация успешна!</h3>
+            <p>На почту ${email} отправлено письмо с подтверждением.</p>
+            <p><strong>Важно:</strong> Данные будут сохранены только после подтверждения email.</p>
+            <p><a href="index.html" style="color: #667eea;">Перейти ко входу →</a></p>
+          </div>
+        `;
+        document.getElementById('registerForm').style.display = 'none';
+      } catch (error) {
+        console.error('Ошибка регистрации:', error);
+        registerBtn.disabled = false;
+        registerBtn.textContent = 'Зарегистрироваться';
+        let errorMessage = '';
+        if (error.code === 'auth/network-request-failed') {
+          errorMessage = '🌐 Проблема с интернетом. Проверьте подключение и попробуйте снова.';
+        } else if (error.code === 'auth/email-already-in-use') {
+          errorMessage = 'Этот email уже зарегистрирован';
+        } else if (error.code === 'auth/invalid-email') {
+          errorMessage = 'Некорректный email';
+        } else if (error.code === 'auth/weak-password') {
+          errorMessage = 'Пароль должен быть минимум 6 символов';
+        } else {
+          errorMessage = 'Ошибка при регистрации. Попробуйте позже.';
+        }
+        messageDiv.innerHTML = `<div class="error">❌ ${errorMessage}</div>`;
+      }
+    });
+  </script>
 </body>
 </html>

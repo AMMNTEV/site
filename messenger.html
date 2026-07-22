@@ -5,10 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>Мессенджер</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/messenger.css">
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <style>
+    /* Дополнительные мобильные фиксы (оставляем минимум) */
+    @media (max-width: 768px) {
+      .messenger-container {
+        height: 100vh;
+        height: -webkit-fill-available;
+        height: 100dvh;
+        overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+      .chats-sidebar {
+        height: 100%;
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .chat-area {
+        height: 100%;
+        padding-bottom: env(safe-area-inset-bottom, 0);
+      }
+      .messages-container {
+        height: calc(100% - 130px);
+        padding-bottom: env(safe-area-inset-bottom, 10px);
+      }
+      .message-input-area {
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="messenger-container">
@@ -22,9 +56,7 @@
     </div>
 
     <div class="chats-sidebar" id="chatsSidebar">
-      <div class="chats-header">
-        <h2>Чаты</h2>
-      </div>
+      <div class="chats-header"><h2>Чаты</h2></div>
       <div class="search-box">
         <input type="text" id="searchInput" placeholder="Поиск пользователей и бесед..." onkeyup="searchAll()">
       </div>
@@ -45,6 +77,7 @@
     </div>
   </div>
 
+  <!-- Мобильное меню -->
   <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">☰</button>
   <div class="sidebar-overlay" id="mobileMenuOverlay" onclick="toggleMobileMenu()"></div>
   <div class="mobile-popup-menu" id="mobilePopupMenu">
@@ -53,7 +86,7 @@
     <button onclick="logout()" class="popup-item logout">Выйти</button>
   </div>
 
-  <!-- Модальные окна -->
+  <!-- Модальное окно создания беседы -->
   <div id="createGroupModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -77,6 +110,7 @@
     </div>
   </div>
 
+  <!-- Модальное окно информации о беседе -->
   <div id="groupInfoModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -89,13 +123,23 @@
           <div id="groupParticipants" class="group-participants-list"></div>
           <button onclick="leaveCurrentGroup()" id="leaveGroupBtn" class="modal-leave-btn" style="margin-top: 10px; width: 100%;">Покинуть беседу</button>
         </div>
+        <div class="group-info-section">
+          <h4>Добавить участников:</h4>
+          <input type="text" id="searchUsersToAdd" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersToAdd()">
+          <div id="addParticipantsList" class="users-checkbox-list">
+            <div class="no-users">Начните вводить имя для поиска</div>
+          </div>
+          <button onclick="addSelectedParticipants()" class="modal-save-btn" style="margin-top: 10px; width: 100%;">Добавить выбранных</button>
+        </div>
       </div>
       <div class="modal-footer">
         <button onclick="hideGroupInfoModal()" class="modal-cancel-btn">Закрыть</button>
+        <button onclick="deleteCurrentGroup()" id="deleteGroupBtn" class="modal-delete-btn">Удалить беседу</button>
       </div>
     </div>
   </div>
 
+  <!-- Модальное окно для управления сообщением -->
   <div id="messageOptionsModal" class="modal">
     <div class="modal-content small">
       <div class="modal-header">
@@ -113,6 +157,7 @@
   </div>
 
   <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/messenger.js"></script>
 </body>
 </html>
