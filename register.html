@@ -7,28 +7,29 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
   <link rel="stylesheet" href="css/common.css">
   <link rel="stylesheet" href="css/auth.css">
+  <!-- Дополнительные стили для поля тега (уже есть в auth.css, поэтому не дублируем) -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 </head>
 <body class="auth-page">
   <div class="auth-card">
-    <h1>Register</h1>
-    <p class="auth-subtitle">Register, Title and subtitle</p>
+    <h1>Регистрация</h1>
+    <p class="auth-subtitle">Создайте аккаунт чтобы начать общение</p>
     <form id="registerForm">
       <div class="auth-input-group">
         <label>Никнейм</label>
         <input type="text" id="nickname" placeholder="Например: Anna" required>
       </div>
       <div class="auth-input-group">
-        <label>Unique tag</label>
+        <label>Тег</label>
         <div class="tag-input-wrapper">
           <span>@</span>
           <input type="text" id="tag" placeholder="username" required
                  oninput="handleTagInput(this); checkTagUnique(this)"
                  onkeydown="preventAtSymbolDeletion(event, this)">
         </div>
-        <div id="tagStatus" class="tag-status">Uniqueness check state</div>
+        <div id="tagStatus" class="tag-status"></div>
       </div>
       <div class="auth-input-group">
         <label>Email</label>
@@ -38,125 +39,123 @@
         <label>Пароль</label>
         <input type="password" id="password" placeholder="Минимум 6 символов" required minlength="6">
       </div>
-      <button type="submit" class="auth-button" id="registerBtn" disabled>Register</button>
-      <button type="button" class="auth-button login-btn" style="background: #000; color: #fff;" onclick="window.location.href='index.html'">Login</button>
-      <div class="auth-footer">
-        Уже есть аккаунт? <a href="index.html">Войти</a><br><br>
-        <span style="color: #999;">Gray —</span> <a href="#">Links</a>
-      </div>
+      <button type="submit" class="auth-button" id="registerBtn" disabled>Зарегистрироваться</button>
     </form>
+    <div class="auth-footer">
+      Уже есть аккаунт? <a href="index.html">Войти</a>
+    </div>
     <div id="message" class="message"></div>
   </div>
 
   <script src="js/firebase-config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    // ========== ЛОГИКА РЕГИСТРАЦИИ ==========[cite: 14]
-    let tagCheckTimeout = null;[cite: 14]
-    let isTagAvailable = false;[cite: 14]
-    let currentTagValue = '';[cite: 14]
+    // ========== ЛОГИКА РЕГИСТРАЦИИ ==========
+    let tagCheckTimeout = null;
+    let isTagAvailable = false;
+    let currentTagValue = '';
 
-    // Обработка ввода тега (удаляем @, ограничиваем символы)[cite: 14]
-    function handleTagInput(input) {[cite: 14]
-      let value = input.value.replace(/@/g, '').slice(0, 20);[cite: 14]
-      value = value.replace(/[^a-zA-Z0-9_]/g, '');[cite: 14]
-      input.value = value;[cite: 14]
+    // Обработка ввода тега (удаляем @, ограничиваем символы)
+    function handleTagInput(input) {
+      let value = input.value.replace(/@/g, '').slice(0, 20);
+      value = value.replace(/[^a-zA-Z0-9_]/g, '');
+      input.value = value;
     }
 
-    // Защита от удаления @[cite: 14]
-    function preventAtSymbolDeletion(event, input) {[cite: 14]
-      if (event.key === 'Backspace' && input.selectionStart === 0 && input.selectionEnd === 0) {[cite: 14]
-        event.preventDefault();[cite: 14]
+    // Защита от удаления @
+    function preventAtSymbolDeletion(event, input) {
+      if (event.key === 'Backspace' && input.selectionStart === 0 && input.selectionEnd === 0) {
+        event.preventDefault();
       }
-      if (event.key === 'Delete' && input.selectionStart === 0 && input.selectionEnd === 1) {[cite: 14]
-        event.preventDefault();[cite: 14]
+      if (event.key === 'Delete' && input.selectionStart === 0 && input.selectionEnd === 1) {
+        event.preventDefault();
       }
-      if (event.key === 'ArrowLeft' && input.selectionStart === 0 && input.selectionEnd === 0) {[cite: 14]
-        event.preventDefault();[cite: 14]
+      if (event.key === 'ArrowLeft' && input.selectionStart === 0 && input.selectionEnd === 0) {
+        event.preventDefault();
       }
     }
 
-    // Проверка уникальности тега (с задержкой)[cite: 14]
-    async function checkTagUnique(input) {[cite: 14]
-      const tagValue = input.value.trim();[cite: 14]
-      const tagStatus = document.getElementById('tagStatus');[cite: 14]
-      const registerBtn = document.getElementById('registerBtn');[cite: 14]
+    // Проверка уникальности тега (с задержкой)
+    async function checkTagUnique(input) {
+      const tagValue = input.value.trim();
+      const tagStatus = document.getElementById('tagStatus');
+      const registerBtn = document.getElementById('registerBtn');
 
-      if (!tagValue) {[cite: 14]
-        tagStatus.innerHTML = '';[cite: 14]
-        tagStatus.className = 'tag-status';[cite: 14]
-        isTagAvailable = false;[cite: 14]
-        registerBtn.disabled = true;[cite: 14]
-        return;[cite: 14]
+      if (!tagValue) {
+        tagStatus.innerHTML = '';
+        tagStatus.className = 'tag-status';
+        isTagAvailable = false;
+        registerBtn.disabled = true;
+        return;
       }
-      if (tagValue.length < 3) {[cite: 14]
-        tagStatus.innerHTML = '⚠️ Минимум 3 символа';[cite: 14]
-        tagStatus.className = 'tag-status unavailable';[cite: 14]
-        isTagAvailable = false;[cite: 14]
-        registerBtn.disabled = true;[cite: 14]
-        return;[cite: 14]
+      if (tagValue.length < 3) {
+        tagStatus.innerHTML = '⚠️ Минимум 3 символа';
+        tagStatus.className = 'tag-status unavailable';
+        isTagAvailable = false;
+        registerBtn.disabled = true;
+        return;
       }
 
-      tagStatus.innerHTML = '⏳ Проверка...';[cite: 14]
-      tagStatus.className = 'tag-status loading';[cite: 14]
-      if (tagCheckTimeout) clearTimeout(tagCheckTimeout);[cite: 14]
-      currentTagValue = tagValue;[cite: 14]
+      tagStatus.innerHTML = '⏳ Проверка...';
+      tagStatus.className = 'tag-status loading';
+      if (tagCheckTimeout) clearTimeout(tagCheckTimeout);
+      currentTagValue = tagValue;
 
-      tagCheckTimeout = setTimeout(async () => {[cite: 14]
-        if (currentTagValue !== tagValue) return;[cite: 14]
-        try {[cite: 14]
-          if (typeof db === 'undefined') {[cite: 14]
-            throw new Error('Firestore не инициализирован. Проверьте путь к firebase-config.js');[cite: 14]
+      tagCheckTimeout = setTimeout(async () => {
+        if (currentTagValue !== tagValue) return;
+        try {
+          if (typeof db === 'undefined') {
+            throw new Error('Firestore не инициализирован. Проверьте путь к firebase-config.js');
           }
 
-          const fullTag = '@' + tagValue;[cite: 14]
-          const snapshot = await db.collection('users').where('tag', '==', fullTag).get();[cite: 14]
+          const fullTag = '@' + tagValue;
+          const snapshot = await db.collection('users').where('tag', '==', fullTag).get();
 
-          if (snapshot.empty) {[cite: 14]
-            tagStatus.innerHTML = '✅ Тег доступен';[cite: 14]
-            tagStatus.className = 'tag-status available';[cite: 14]
-            isTagAvailable = true;[cite: 14]
-            registerBtn.disabled = false;[cite: 14]
-          } else {[cite: 14]
-            tagStatus.innerHTML = '❌ Этот тег уже занят';[cite: 14]
-            tagStatus.className = 'tag-status unavailable';[cite: 14]
-            isTagAvailable = false;[cite: 14]
-            registerBtn.disabled = true;[cite: 14]
+          if (snapshot.empty) {
+            tagStatus.innerHTML = '✅ Тег доступен';
+            tagStatus.className = 'tag-status available';
+            isTagAvailable = true;
+            registerBtn.disabled = false;
+          } else {
+            tagStatus.innerHTML = '❌ Этот тег уже занят';
+            tagStatus.className = 'tag-status unavailable';
+            isTagAvailable = false;
+            registerBtn.disabled = true;
           }
-        } catch (error) {[cite: 14]
-          console.error('Ошибка проверки тега:', error);[cite: 14]
-          tagStatus.innerHTML = '❌ Ошибка проверки';[cite: 14]
-          tagStatus.className = 'tag-status unavailable';[cite: 14]
-          isTagAvailable = false;[cite: 14]
-          registerBtn.disabled = true;[cite: 14]
+        } catch (error) {
+          console.error('Ошибка проверки тега:', error);
+          tagStatus.innerHTML = '❌ Ошибка проверки';
+          tagStatus.className = 'tag-status unavailable';
+          isTagAvailable = false;
+          registerBtn.disabled = true;
         }
-      }, 500);[cite: 14]
+      }, 500);
     }
 
-    // Обработка отправки формы[cite: 14]
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {[cite: 14]
-      e.preventDefault();[cite: 14]
+    // Обработка отправки формы
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-      if (!isTagAvailable) {[cite: 14]
-        alert('Пожалуйста, выберите другой тег');[cite: 14]
-        return;[cite: 14]
+      if (!isTagAvailable) {
+        alert('Пожалуйста, выберите другой тег');
+        return;
       }
 
-      const nickname = document.getElementById('nickname').value.trim();[cite: 14]
-      let tag = document.getElementById('tag').value.trim();[cite: 14]
-      const email = document.getElementById('email').value.trim();[cite: 14]
-      const password = document.getElementById('password').value;[cite: 14]
+      const nickname = document.getElementById('nickname').value.trim();
+      let tag = document.getElementById('tag').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
 
-      tag = '@' + tag;[cite: 14]
+      tag = '@' + tag;
 
-      const registerBtn = document.getElementById('registerBtn');[cite: 14]
-      const messageDiv = document.getElementById('message');[cite: 14]
+      const registerBtn = document.getElementById('registerBtn');
+      const messageDiv = document.getElementById('message');
 
-      registerBtn.disabled = true;[cite: 14]
-      registerBtn.textContent = 'Регистрация...';[cite: 14]
+      registerBtn.disabled = true;
+      registerBtn.textContent = 'Регистрация...';
 
-      try {[cite: 14]
-        await register(email, password, nickname, tag);[cite: 14]
+      try {
+        await register(email, password, nickname, tag);
 
         messageDiv.innerHTML = `
           <div class="success">
@@ -165,42 +164,42 @@
             <p><strong>Важно:</strong> Данные будут сохранены только после подтверждения email.</p>
             <p><a href="index.html" style="color: #667eea;">Перейти ко входу →</a></p>
           </div>
-        `;[cite: 14]
-        document.getElementById('registerForm').style.display = 'none';[cite: 14]
+        `;
+        document.getElementById('registerForm').style.display = 'none';
 
-      } catch (error) {[cite: 14]
-        console.error('Ошибка регистрации:', error);[cite: 14]
-        registerBtn.disabled = false;[cite: 14]
-        registerBtn.textContent = 'Зарегистрироваться';[cite: 14]
+      } catch (error) {
+        console.error('Ошибка регистрации:', error);
+        registerBtn.disabled = false;
+        registerBtn.textContent = 'Зарегистрироваться';
 
-        let errorMessage = '';[cite: 14]
+        let errorMessage = '';
 
-        // Обработка ошибок Firebase[cite: 14]
-        switch (error.code) {[cite: 14]
-          case 'auth/network-request-failed':[cite: 14]
-            errorMessage = '🌐 Проблема с интернетом. Проверьте подключение и попробуйте снова.';[cite: 14]
-            break;[cite: 14]
-          case 'auth/email-already-in-use':[cite: 14]
-            errorMessage = '❌ Этот email уже зарегистрирован. <a href="index.html">Войти</a>';[cite: 14]
-            break;[cite: 14]
-          case 'auth/invalid-email':[cite: 14]
-            errorMessage = '📧 Некорректный email';[cite: 14]
-            break;[cite: 14]
-          case 'auth/weak-password':[cite: 14]
-            errorMessage = '🔒 Пароль должен быть минимум 6 символов';[cite: 14]
-            break;[cite: 14]
-          case 'auth/too-many-requests':[cite: 14]
-            errorMessage = '⏳ Слишком много попыток. Подождите несколько минут.';[cite: 14]
-            break;[cite: 14]
-          case 'auth/unauthorized-continue-uri':[cite: 14]
-            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';[cite: 14]
-            break;[cite: 14]
-          default:[cite: 14]
-            // Убираем технические детали ошибки[cite: 14]
-            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';[cite: 14]
+        // Обработка ошибок Firebase
+        switch (error.code) {
+          case 'auth/network-request-failed':
+            errorMessage = '🌐 Проблема с интернетом. Проверьте подключение и попробуйте снова.';
+            break;
+          case 'auth/email-already-in-use':
+            errorMessage = '❌ Этот email уже зарегистрирован. <a href="index.html">Войти</a>';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = '📧 Некорректный email';
+            break;
+          case 'auth/weak-password':
+            errorMessage = '🔒 Пароль должен быть минимум 6 символов';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = '⏳ Слишком много попыток. Подождите несколько минут.';
+            break;
+          case 'auth/unauthorized-continue-uri':
+            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';
+            break;
+          default:
+            // Убираем технические детали ошибки
+            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';
         }
 
-        messageDiv.innerHTML = `<div class="error">${errorMessage}</div>`;[cite: 14]
+        messageDiv.innerHTML = `<div class="error">${errorMessage}</div>`;
       }
     });
   </script>

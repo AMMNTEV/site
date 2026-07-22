@@ -13,71 +13,52 @@
 </head>
 <body>
   <div class="profile-container">
-    
-    <div class="profile-header desktop-only">
-      <a href="messenger.html" class="back-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></a>
+    <div class="profile-header">
+      <a href="messenger.html" class="back-btn"><</a>
       <button onclick="logout()" class="logout-small-header">Выйти</button>
     </div>
-
-    <!-- Обложка профиля -->
-    <div class="profile-cover" style="background-image: url('default-cover.jpg');"></div>
-
-    <div class="profile-info-section">
-      <div class="profile-top-actions">
-        <!-- Аватар -->
-        <div class="avatar-large" id="profileAvatar">
-          <div class="skeleton-circle"></div>[cite: 13]
-        </div>
-        
-        <div class="profile-action-buttons">
-          <button class="icon-btn" id="message-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-          </button>
-          <button class="follow-btn" id="follow-btn">Follow</button>
+    <div class="profile-two-columns">
+      <div class="profile-left">
+        <div class="profile-card">
+          <div class="profile-avatar-placeholder">
+            <div class="avatar-large" id="profileAvatar">
+              <div class="skeleton-circle"></div>
+            </div>
+          </div>
+          <div class="profile-info" id="profileInfo">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
         </div>
       </div>
-
-      <!-- Информация пользователя -->
-      <div id="profileInfo">
-        <div class="skeleton-line"></div>[cite: 13]
-        <div class="skeleton-line"></div>[cite: 13]
-        <div class="skeleton-line"></div>[cite: 13]
-      </div>
-
-      <!-- Табы -->
-      <div class="profile-tabs">
-        <button class="tab active">Posts</button>
-        <button class="tab">Replies</button>
-        <button class="tab">Media</button>
-        <button class="tab">Likes</button>
-      </div>
-
-      <!-- Посты -->
-      <div class="posts-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="display:none;">Мои посты</h2>
-        <button onclick="showCreatePostModal()" class="create-post-btn">+ Новый пост</button>
-      </div>
-      <div class="posts-container" id="postsContainer">
-        <div class="skeleton-post"></div>[cite: 13]
-        <div class="skeleton-post"></div>[cite: 13]
-        <div class="skeleton-post"></div>[cite: 13]
+      <div class="profile-right">
+        <div class="posts-header">
+          <h2>Мои посты</h2>
+          <button onclick="showCreatePostModal()" class="create-post-btn">+ Новый пост</button>
+        </div>
+        <div class="posts-container" id="postsContainer">
+          <div class="skeleton-post"></div>
+          <div class="skeleton-post"></div>
+          <div class="skeleton-post"></div>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Модальное окно для создания поста -->
-  <div id="postModal" class="modal">[cite: 13]
-    <div class="modal-content">[cite: 13]
-      <div class="modal-header">[cite: 13]
-        <h3>Создать новый пост</h3>[cite: 13]
-        <button onclick="hideCreatePostModal()" class="modal-close">&times;</button>[cite: 13]
+  <div id="postModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Создать новый пост</h3>
+        <button onclick="hideCreatePostModal()" class="modal-close">&times;</button>
       </div>
-      <div class="modal-body">[cite: 13]
-        <textarea id="postContent" placeholder="Что у вас нового?" rows="5"></textarea>[cite: 13]
+      <div class="modal-body">
+        <textarea id="postContent" placeholder="Что у вас нового?" rows="5"></textarea>
       </div>
-      <div class="modal-footer">[cite: 13]
-        <button onclick="hideCreatePostModal()" class="modal-cancel-btn">Отмена</button>[cite: 13]
-        <button onclick="createPost()" class="modal-save-btn">Опубликовать</button>[cite: 13]
+      <div class="modal-footer">
+        <button onclick="hideCreatePostModal()" class="modal-cancel-btn">Отмена</button>
+        <button onclick="createPost()" class="modal-save-btn">Опубликовать</button>
       </div>
     </div>
   </div>
