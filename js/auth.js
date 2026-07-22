@@ -30,11 +30,29 @@ async function login(email, password) {
 }
 
 async function register(email, password, nickname, tag) {
+  // 1. Создаём пользователя
   const userCredential = await auth.createUserWithEmailAndPassword(email, password);
   const user = userCredential.user;
+
+  // 2. Обновляем displayName
   await user.updateProfile({ displayName: nickname + '|' + tag });
-  await user.sendEmailVerification({ url: window.location.origin + '/index.html' });
+
+  // 3. Сохраняем данные пользователя в Firestore
+  await db.collection('users').doc(user.uid).set({
+    nickname: nickname,
+    tag: tag,
+    email: email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  // 4. Отправляем письмо с подтверждением (с правильным URL)
+  await user.sendEmailVerification({
+    url: window.location.origin + '/index.html'
+  });
+
+  // 5. Выходим из аккаунта (пользователь должен подтвердить email)
   await auth.signOut();
+
   return user;
 }
 
