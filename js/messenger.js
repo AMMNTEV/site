@@ -10,7 +10,6 @@ let isChatMode = false;
 let selectedMessageId = null;
 let unreadCounts = {};
 let isCreatingGroup = false;
-const userCache = new Map();
 
 // ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ ==========
 async function loadAllUsers() {

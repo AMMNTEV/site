@@ -1,4 +1,5 @@
 // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+window.userCache = new Map();
 let currentUser = null;
 let currentUserData = null;
 
