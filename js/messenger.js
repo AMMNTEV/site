@@ -853,27 +853,97 @@ function hideMessageOptions() {
   document.getElementById('messageOptionsModal').style.display = 'none';
   selectedMessageId = null;
 }
+// ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ ПРЕВЬЮ ЧАТА ==========
+async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
+  // Получаем последнее видимое сообщение для текущего пользователя
+  const snapshot = await db.collection('chats').doc(chatId)
+    .collection('messages')
+    .orderBy('timestamp', 'desc')
+    .limit(20) // берём с запасом
+    .get();
+
+  let newLastMessage = null;
+  let newLastMessageTime = null;
+
+  for (const doc of snapshot.docs) {
+    const msg = doc.data();
+    // Проверяем, что сообщение не удалено для текущего пользователя и не удалено для всех
+    if (!msg.deletedFor || (!msg.deletedFor.includes('everyone') && !msg.deletedFor.includes(currentUser.uid))) {
+      newLastMessage = msg.text;
+      newLastMessageTime = msg.timestamp ? msg.timestamp.toDate() : null;
+      break;
+    }
+  }
+
+  // Если удаление "для всех", обновляем Firestore
+  if (isForEveryone) {
+    await db.collection('chats').doc(chatId).update({
+      lastMessage: newLastMessage,
+      lastMessageTime: newLastMessageTime ? firebase.firestore.Timestamp.fromDate(newLastMessageTime) : null
+    });
+  } else {
+    // Для себя – обновляем только локально
+    const chatIndex = allChats.findIndex(c => c.id === chatId);
+    if (chatIndex !== -1) {
+      allChats[chatIndex].lastMessage = newLastMessage;
+      allChats[chatIndex].lastMessageTime = newLastMessageTime;
+    }
+    if (selectedChat && selectedChat.id === chatId) {
+      selectedChat.lastMessage = newLastMessage;
+      selectedChat.lastMessageTime = newLastMessageTime;
+    }
+    // Перерисовываем список чатов
+    displayChats(allChats);
+  }
+}
+
+// ========== УДАЛЕНИЕ СООБЩЕНИЙ ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
+
   try {
+    // Обновляем deletedFor у себя
     await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .doc(selectedMessageId)
-      .update({ deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+      .update({
+        deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+      });
+
+    // Удаляем элемент из DOM сразу
+    const msgElement = document.getElementById(`msg-${selectedMessageId}`);
+    if (msgElement) msgElement.remove();
+
+    // Обновляем превью чата локально
+    await updateChatPreviewAfterDelete(currentChatId, false);
+
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
     alert('Ошибка при удалении сообщения');
   }
 }
+
 async function deleteMessageForEveryone() {
   if (!selectedMessageId || !currentChatId) return;
   if (!confirm('Удалить это сообщение у всех участников?')) return;
+
   try {
+    // Обновляем deletedFor у всех
     await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .doc(selectedMessageId)
-      .update({ deletedFor: ['everyone'] });
+      .update({
+        deletedFor: ['everyone']
+      });
+
+    // Удаляем элемент из DOM сразу
+    const msgElement = document.getElementById(`msg-${selectedMessageId}`);
+    if (msgElement) msgElement.remove();
+
+    // Обновляем превью чата глобально (обновит Firestore и вызовет listenForChats)
+    await updateChatPreviewAfterDelete(currentChatId, true);
+
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
