@@ -17,7 +17,18 @@ onAuthStateChanged(async (user) => {
   }
   try {
     const doc = await db.collection('users').doc(user.uid).get();
-    if (!doc.exists) { window.location.reload(); return; }
+    if (!doc.exists) {
+      // Если документа нет – создаём его (для обратной совместимости)
+      await db.collection('users').doc(user.uid).set({
+        nickname: user.displayName ? user.displayName.split('|')[0] : 'Пользователь',
+        tag: user.displayName ? '@' + user.displayName.split('|')[1] : '@user',
+        email: user.email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      // После создания перезагружаем страницу, чтобы данные подтянулись
+      window.location.reload();
+      return;
+    }
     currentUserData = doc.data();
     userCache.set(user.uid, currentUserData);
     document.getElementById('profileAvatar').innerHTML = currentUserData.nickname ? currentUserData.nickname.charAt(0).toUpperCase() : '?';
