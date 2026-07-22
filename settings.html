@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>Настройки</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body class="settings-page">
+  <div class="settings-container">
+    <div class="settings-header">
+      <a href="messenger.html" class="back-btn"><</a>
+      <h1>Настройки</h1>
+      <div style="width: 44px;"></div>
+    </div>
+
+    <div class="settings-content">
+      <div class="user-card" id="userCard">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">Загрузка...</div>
+          <div class="user-tag" id="userTag">@loading</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-item" onclick="window.location.href='profile.html'">
+          <div class="settings-item-icon">👤</div>
+          <div class="settings-item-info">
+            <div class="settings-item-title">Профиль</div>
+            <div class="settings-item-desc">Изменить имя, тег и другую информацию</div>
+          </div>
+          <div class="settings-item-arrow">→</div>
+        </div>
+
+        <div class="settings-item">
+          <div class="settings-item-icon">🌙</div>
+          <div class="settings-item-info">
+            <div class="settings-item-title">Темная тема</div>
+            <div class="settings-item-desc">Использовать темную тему оформления</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="darkThemeToggle" onchange="toggleTheme(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <button onclick="logout()" class="settings-danger-btn">Выйти из аккаунта</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

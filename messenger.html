@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>Мессенджер</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="messenger-container">
+    <div class="nav-sidebar">
+      <h2>Меню</h2>
+      <div class="nav-buttons">
+        <a href="profile.html" class="nav-button profile">Мой профиль</a>
+        <button onclick="showCreateGroupModal()" class="nav-button create-group">+ Беседа</button>
+        <button onclick="logout()" class="nav-button logout">Выйти</button>
+      </div>
+    </div>
+
+    <div class="chats-sidebar" id="chatsSidebar">
+      <div class="chats-header">
+        <h2>Чаты</h2>
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Поиск пользователей и бесед..." onkeyup="searchAll()">
+      </div>
+      <div class="chats-list" id="chatsList">
+        <div class="loading">Загрузка чатов...</div>
+      </div>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+      <div class="chat-header" id="chatHeader">
+        <div class="no-chat-selected" id="noChatMessage">Выберите чат для начала общения</div>
+      </div>
+      <div class="messages-container" id="messagesContainer"></div>
+      <div class="message-input-area" id="messageInputArea" style="display: none;">
+        <input type="text" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()" id="sendButton">→</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">☰</button>
+  <div class="sidebar-overlay" id="mobileMenuOverlay" onclick="toggleMobileMenu()"></div>
+  <div class="mobile-popup-menu" id="mobilePopupMenu">
+    <a href="profile.html" class="popup-item">Мой профиль</a>
+    <button onclick="showCreateGroupModal(); toggleMobileMenu()" class="popup-item">+ Беседа</button>
+    <button onclick="logout()" class="popup-item logout">Выйти</button>
+  </div>
+
+  <!-- Модальные окна -->
+  <div id="createGroupModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Создать новую беседу</h3>
+        <button onclick="hideCreateGroupModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="groupName" placeholder="Название беседы" class="modal-input">
+        <div class="group-participants">
+          <h4>Выберите участников:</h4>
+          <input type="text" id="searchUsersInCreate" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersInCreate()">
+          <div id="usersListModal" class="users-checkbox-list">
+            <div class="no-users">Начните вводить имя для поиска</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="hideCreateGroupModal()" class="modal-cancel-btn">Отмена</button>
+        <button onclick="createGroupChat()" class="modal-save-btn">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="groupInfoModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="groupInfoName">Информация о беседе</h3>
+        <button onclick="hideGroupInfoModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="group-info-section">
+          <h4>Участники:</h4>
+          <div id="groupParticipants" class="group-participants-list"></div>
+          <button onclick="leaveCurrentGroup()" id="leaveGroupBtn" class="modal-leave-btn" style="margin-top: 10px; width: 100%;">Покинуть беседу</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="hideGroupInfoModal()" class="modal-cancel-btn">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="messageOptionsModal" class="modal">
+    <div class="modal-content small">
+      <div class="modal-header">
+        <h3>Действия с сообщением</h3>
+        <button onclick="hideMessageOptions()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <button onclick="deleteMessageForMe()" class="modal-option-btn">Удалить у себя</button>
+        <button onclick="deleteMessageForEveryone()" id="deleteForEveryoneBtn" class="modal-option-btn delete">Удалить у всех</button>
+      </div>
+      <div class="modal-footer">
+        <button onclick="hideMessageOptions()" class="modal-cancel-btn">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/messenger.js"></script>
+</body>
+</html>

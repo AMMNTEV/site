@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Регистрация</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <h1>Регистрация</h1>
+    <p class="auth-subtitle">Создайте аккаунт чтобы начать общение</p>
+    <form id="registerForm">
+      <div class="auth-input-group">
+        <label>Никнейм</label>
+        <input type="text" id="nickname" placeholder="Например: Anna" required>
+      </div>
+      <div class="auth-input-group">
+        <label>Тег</label>
+        <div class="tag-input-wrapper">
+          <span>@</span>
+          <input type="text" id="tag" placeholder="username" required 
+                 oninput="handleTagInput(this); checkTagUnique(this)" 
+                 onkeydown="preventAtSymbolDeletion(event, this)">
+        </div>
+        <div id="tagStatus" class="tag-status"></div>
+      </div>
+      <div class="auth-input-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="your@email.com" required>
+      </div>
+      <div class="auth-input-group">
+        <label>Пароль</label>
+        <input type="password" id="password" placeholder="Минимум 6 символов" required minlength="6">
+      </div>
+      <button type="submit" class="auth-button" id="registerBtn" disabled>Зарегистрироваться</button>
+    </form>
+    <div class="auth-footer">
+      Уже есть аккаунт? <a href="index.html">Войти</a>
+    </div>
+    <div id="message" class="message"></div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

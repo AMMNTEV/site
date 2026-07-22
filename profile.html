@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мой профиль</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="profile-container">
+    <div class="profile-header">
+      <a href="messenger.html" class="back-btn"><</a>
+      <button onclick="logout()" class="logout-small-header">Выйти</button>
+    </div>
+    
+    <div class="profile-two-columns">
+      <div class="profile-left">
+        <div class="profile-card">
+          <div class="profile-avatar-placeholder">
+            <div class="avatar-large" id="profileAvatar">
+              <div class="skeleton-circle"></div>
+            </div>
+          </div>
+          <div class="profile-info" id="profileInfo">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="profile-right">
+        <div class="posts-header">
+          <h2>Мои посты</h2>
+          <button onclick="showCreatePostModal()" class="create-post-btn">+ Новый пост</button>
+        </div>
+        <div class="posts-container" id="postsContainer">
+          <div class="skeleton-post"></div>
+          <div class="skeleton-post"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="postModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Создать новый пост</h3>
+        <button onclick="hideCreatePostModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="postContent" placeholder="Что у вас нового?" rows="5"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button onclick="hideCreatePostModal()" class="modal-cancel-btn">Отмена</button>
+        <button onclick="createPost()" class="modal-save-btn">Опубликовать</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/profile.js"></script>
+</body>
+</html>

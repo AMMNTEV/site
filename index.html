@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход в аккаунт</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <h1>Вход в аккаунт</h1>
+    <form id="loginForm">
+      <div class="auth-input-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="your@email.com" required>
+      </div>
+      <div class="auth-input-group">
+        <label>Пароль</label>
+        <input type="password" id="password" placeholder="••••••••" required>
+      </div>
+      <div class="auth-links">
+        <a href="forgot-password.html" class="forgot-password-link">Забыли пароль?</a>
+      </div>
+      <button type="submit" class="auth-button" id="loginBtn">Войти</button>
+    </form>
+    <div class="auth-footer">
+      Нет аккаунта? <a href="register.html">Зарегистрироваться</a>
+    </div>
+    <div id="message" class="message"></div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>
