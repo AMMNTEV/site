@@ -1,28 +1,28 @@
-!DOCTYPE html
-html lang=ru
-head
-  meta charset=UTF-8
-  meta name=viewport content=width=device-width, initial-scale=1.0
-  titleПрофиль пользователяtitle
-  link rel=icon href=dataimagesvg+xml,svg xmlns='httpwww.w3.org2000svg' viewBox='0 0 100 100'text y='.9em' font-size='90'👤textsvg
-  link rel=stylesheet href=csscommon.css
-  link rel=stylesheet href=cssprofile.css
-  script src=httpswww.gstatic.comfirebasejs9.6.1firebase-app-compat.jsscript
-  script src=httpswww.gstatic.comfirebasejs9.6.1firebase-auth-compat.jsscript
-  script src=httpswww.gstatic.comfirebasejs9.6.1firebase-firestore-compat.jsscript
-head
-body
-  div class=profile-container
-    div class=profile-header
-      a href=messenger.html class=back-btn id=backButtona
-    div
-    div class=profile-two-columns id=profileContent
-      div class=loadingЗагрузка профиля...div
-    div
-  div
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль пользователя</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>">
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/profile.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="profile-container">
+    <div class="profile-header">
+      <a href="messenger.html" class="back-btn" id="backButton"><</a>
+    </div>
+    <div class="profile-two-columns" id="profileContent">
+      <div class="loading">Загрузка профиля...</div>
+    </div>
+  </div>
 
-  script src=jsfirebase-config.jsscript
-  script src=jsauth.jsscript
-  script src=jsuser.jsscript
-body
-html
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/user.js"></script>
+</body>
+</html>
