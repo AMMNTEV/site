@@ -7,34 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
   <link rel="stylesheet" href="css/common.css">
   <link rel="stylesheet" href="css/auth.css">
-  <style>
-    .tag-input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-    .tag-input-wrapper span {
-      position: absolute;
-      left: 14px;
-      color: #666;
-      font-size: 1rem;
-      pointer-events: none;
-      z-index: 1;
-    }
-    .tag-input-wrapper input {
-      padding-left: 30px !important;
-    }
-    .tag-status {
-      font-size: 0.8rem;
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .tag-status.available { color: #10b981; }
-    .tag-status.unavailable { color: #ef4444; }
-    .tag-status.loading { color: #6b7280; }
-  </style>
+  <!-- Дополнительные стили для поля тега (уже есть в auth.css, поэтому не дублируем) -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -151,7 +124,7 @@
           }
         } catch (error) {
           console.error('Ошибка проверки тега:', error);
-          tagStatus.innerHTML = '❌ Ошибка: ' + (error.message || 'проверьте консоль');
+          tagStatus.innerHTML = '❌ Ошибка проверки';
           tagStatus.className = 'tag-status unavailable';
           isTagAvailable = false;
           registerBtn.disabled = true;
@@ -182,10 +155,8 @@
       registerBtn.textContent = 'Регистрация...';
 
       try {
-        // ✅ ИСПОЛЬЗУЕМ ФУНКЦИЮ ИЗ auth.js (она создаёт пользователя, сохраняет в Firestore и отправляет письмо)
         await register(email, password, nickname, tag);
 
-        // После успешной регистрации показываем сообщение
         messageDiv.innerHTML = `
           <div class="success">
             <h3>✅ Регистрация успешна!</h3>
@@ -220,8 +191,12 @@
           case 'auth/too-many-requests':
             errorMessage = '⏳ Слишком много попыток. Подождите несколько минут.';
             break;
+          case 'auth/unauthorized-continue-uri':
+            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';
+            break;
           default:
-            errorMessage = '❌ Ошибка при регистрации. ' + (error.message || 'Попробуйте позже.');
+            // Убираем технические детали ошибки
+            errorMessage = '❌ Ошибка при регистрации. Попробуйте позже.';
         }
 
         messageDiv.innerHTML = `<div class="error">${errorMessage}</div>`;
