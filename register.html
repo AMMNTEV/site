@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Регистрация</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
-  <!-- ✅ Подключаем общие стили и стили для страниц авторизации -->
   <link rel="stylesheet" href="css/common.css">
   <link rel="stylesheet" href="css/auth.css">
-  <!-- Дополнительные стили для поля тега (можно оставить здесь или добавить в auth.css) -->
   <style>
     .tag-input-wrapper {
       position: relative;
@@ -37,7 +35,6 @@
     .tag-status.unavailable { color: #ef4444; }
     .tag-status.loading { color: #6b7280; }
   </style>
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -77,22 +74,18 @@
     <div id="message" class="message"></div>
   </div>
 
-  <!-- ✅ Подключаем конфигурацию Firebase (из папки js) -->
   <script src="js/firebase-config.js"></script>
   <script>
-    // ========== ЛОГИКА РЕГИСТРАЦИИ ==========
     let tagCheckTimeout = null;
     let isTagAvailable = false;
     let currentTagValue = '';
 
-    // Обработка ввода тега (удаляем @, ограничиваем символы)
     function handleTagInput(input) {
       let value = input.value.replace(/@/g, '').slice(0, 20);
       value = value.replace(/[^a-zA-Z0-9_]/g, '');
       input.value = value;
     }
 
-    // Защита от удаления @
     function preventAtSymbolDeletion(event, input) {
       if (event.key === 'Backspace' && input.selectionStart === 0 && input.selectionEnd === 0) {
         event.preventDefault();
@@ -105,7 +98,6 @@
       }
     }
 
-    // Проверка уникальности тега (с задержкой)
     async function checkTagUnique(input) {
       const tagValue = input.value.trim();
       const tagStatus = document.getElementById('tagStatus');
@@ -134,14 +126,11 @@
       tagCheckTimeout = setTimeout(async () => {
         if (currentTagValue !== tagValue) return;
         try {
-          // Проверяем, что db инициализирована
           if (typeof db === 'undefined') {
-            throw new Error('Firestore не инициализирован. Проверьте путь к firebase-config.js');
+            throw new Error('Firestore не инициализирован.');
           }
-
           const fullTag = '@' + tagValue;
           const snapshot = await db.collection('users').where('tag', '==', fullTag).get();
-
           if (snapshot.empty) {
             tagStatus.innerHTML = '✅ Тег доступен';
             tagStatus.className = 'tag-status available';
@@ -163,7 +152,6 @@
       }, 500);
     }
 
-    // Обработка отправки формы
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -176,8 +164,6 @@
       let tag = document.getElementById('tag').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-
-      // Добавляем @ к тегу для хранения
       tag = '@' + tag;
 
       const registerBtn = document.getElementById('registerBtn');
@@ -187,16 +173,21 @@
       registerBtn.textContent = 'Регистрация...';
 
       try {
-        // 1. Создаём пользователя в Authentication
+        // 1. Создаём пользователя
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // 2. Обновляем displayName
+        // 2. Обновляем профиль
         await user.updateProfile({
           displayName: nickname + '|' + tag
         });
 
-        // 3. Сохраняем данные пользователя в Firestore
+        // 3. Отправляем письмо (ВАЖНО: сначала письмо, потом сохранение в Firestore)
+        await user.sendEmailVerification({
+          url: window.location.origin + '/index.html'
+        });
+
+        // 4. Если письмо успешно отправлено, сохраняем в Firestore
         await db.collection('users').doc(user.uid).set({
           nickname: nickname,
           tag: tag,
@@ -204,15 +195,9 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // 4. Отправляем письмо с подтверждением
-        await user.sendEmailVerification({
-          url: window.location.origin + '/index.html'
-        });
-
-        // 5. Выходим из аккаунта (пользователь должен подтвердить email)
+        // 5. Выходим
         await auth.signOut();
 
-        // 6. Показываем сообщение об успехе
         messageDiv.innerHTML = `
           <div class="success">
             <h3>✅ Регистрация успешна!</h3>
@@ -225,6 +210,20 @@
 
       } catch (error) {
         console.error('Ошибка регистрации:', error);
+
+        // Если ошибка не "email уже занят", и пользователь создан — удаляем его
+        if (error.code !== 'auth/email-already-in-use') {
+          const user = auth.currentUser;
+          if (user) {
+            try {
+              await user.delete();
+              console.log('Пользователь удалён из-за ошибки отправки письма');
+            } catch (deleteError) {
+              console.error('Не удалось удалить пользователя:', deleteError);
+            }
+          }
+        }
+
         registerBtn.disabled = false;
         registerBtn.textContent = 'Зарегистрироваться';
 
