@@ -11,147 +11,161 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
   <style>
-    /* Дополнительные мобильные фиксы (оставляем минимум) */
-    @media (max-width: 768px) {
-      .messenger-container {
-        height: 100vh;
-        height: -webkit-fill-available;
-        height: 100dvh;
-        overflow: hidden;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+    /* Дополнительные мобильные фиксы (оставляем минимум) */[cite: 12]
+    @media (max-width: 768px) {[cite: 12]
+      .messenger-container {[cite: 12]
+        height: 100vh;[cite: 12]
+        height: -webkit-fill-available;[cite: 12]
+        height: 100dvh;[cite: 12]
+        overflow: hidden;[cite: 12]
+        position: fixed;[cite: 12]
+        top: 0;[cite: 12]
+        left: 0;[cite: 12]
+        right: 0;[cite: 12]
+        bottom: 0;[cite: 12]
       }
-      .chats-sidebar {
-        height: 100%;
-        padding-bottom: env(safe-area-inset-bottom, 20px);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+      .chats-sidebar {[cite: 12]
+        height: 100%;[cite: 12]
+        padding-bottom: env(safe-area-inset-bottom, 20px);[cite: 12]
+        overflow-y: auto;[cite: 12]
+        -webkit-overflow-scrolling: touch;[cite: 12]
       }
-      .chat-area {
-        height: 100%;
-        padding-bottom: env(safe-area-inset-bottom, 0);
+      .chat-area {[cite: 12]
+        height: 100%;[cite: 12]
+        padding-bottom: env(safe-area-inset-bottom, 0);[cite: 12]
       }
-      .messages-container {
-        height: calc(100% - 130px);
-        padding-bottom: env(safe-area-inset-bottom, 10px);
+      .messages-container {[cite: 12]
+        height: calc(100% - 130px);[cite: 12]
+        padding-bottom: env(safe-area-inset-bottom, 10px);[cite: 12]
       }
-      .message-input-area {
-        padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+      .message-input-area {[cite: 12]
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));[cite: 12]
       }
     }
   </style>
 </head>
 <body>
   <div class="messenger-container">
+    
+    <!-- Навигация -->
     <div class="nav-sidebar">
-      <h2>Меню</h2>
-      <div class="nav-buttons">
-        <a href="profile.html" class="nav-button profile">Мой профиль</a>
-        <button onclick="showCreateGroupModal()" class="nav-button create-group">+ Беседа</button>
-        <button onclick="logout()" class="nav-button logout">Выйти</button>
+      <div class="nav-section">
+        <h2>Nav</h2>
+        <div class="nav-buttons">
+          <button onclick="showCreateGroupModal()" class="nav-button"><span class="icon">+</span> Creation</button>
+          <button onclick="logout()" class="nav-button danger"><span class="icon">⚠</span> Logout <span class="badge">1</span></button>
+          <button class="nav-button active"><span class="icon">💬</span> Chats</button>
+          <a href="profile.html" class="nav-button" style="text-decoration:none;"><span class="icon">👤</span> Profile</a>
+        </div>
       </div>
     </div>
 
+    <!-- Боковая панель чатов -->
     <div class="chats-sidebar" id="chatsSidebar">
-      <div class="chats-header"><h2>Чаты</h2></div>
+      <div class="chats-header">
+        <h2>Chats</h2>
+        <button class="icon-btn edit-chats-btn" style="background: none; border: none; cursor: pointer;">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+      </div>
       <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Поиск пользователей и бесед..." onkeyup="searchAll()">
+        <input type="text" id="searchInput" placeholder="Search..." onkeyup="searchAll()">
       </div>
       <div class="chats-list" id="chatsList">
-        <div class="loading">Загрузка чатов...</div>
+        <div class="loading">Загрузка чатов...</div>[cite: 12]
       </div>
     </div>
 
+    <!-- Область переписки -->
     <div class="chat-area" id="chatArea">
       <div class="chat-header" id="chatHeader">
-        <div class="no-chat-selected" id="noChatMessage">Выберите чат для начала общения</div>
+        <div class="no-chat-selected" id="noChatMessage">Выберите чат для начала общения</div>[cite: 12]
       </div>
-      <div class="messages-container" id="messagesContainer"></div>
-      <div class="message-input-area" id="messageInputArea" style="display: none;">
-        <input type="text" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button onclick="sendMessage()" id="sendButton">→</button>
+      <div class="messages-container" id="messagesContainer"></div>[cite: 12]
+      
+      <div class="message-input-area" id="messageInputArea" style="display: none;">[cite: 12]
+        <button class="attach-btn" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">+</button>
+        <input type="text" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">[cite: 12]
+        <button onclick="sendMessage()" id="sendButton" class="send-btn">→</button>[cite: 12]
       </div>
     </div>
   </div>
 
-  <!-- Мобильное меню -->
-  <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">☰</button>
-  <div class="sidebar-overlay" id="mobileMenuOverlay" onclick="toggleMobileMenu()"></div>
-  <div class="mobile-popup-menu" id="mobilePopupMenu">
-    <a href="profile.html" class="popup-item">Мой профиль</a>
-    <button onclick="showCreateGroupModal(); toggleMobileMenu()" class="popup-item">+ Беседа</button>
-    <button onclick="logout()" class="popup-item logout">Выйти</button>
+  <!-- Мобильное меню -->[cite: 12]
+  <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">☰</button>[cite: 12]
+  <div class="sidebar-overlay" id="mobileMenuOverlay" onclick="toggleMobileMenu()"></div>[cite: 12]
+  <div class="mobile-popup-menu" id="mobilePopupMenu">[cite: 12]
+    <a href="profile.html" class="popup-item">Мой профиль</a>[cite: 12]
+    <button onclick="showCreateGroupModal(); toggleMobileMenu()" class="popup-item">+ Беседа</button>[cite: 12]
+    <button onclick="logout()" class="popup-item logout">Выйти</button>[cite: 12]
   </div>
 
-  <!-- Модальное окно создания беседы -->
-  <div id="createGroupModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Создать новую беседу</h3>
-        <button onclick="hideCreateGroupModal()" class="modal-close">&times;</button>
+  <!-- Модальное окно создания беседы -->[cite: 12]
+  <div id="createGroupModal" class="modal">[cite: 12]
+    <div class="modal-content">[cite: 12]
+      <div class="modal-header">[cite: 12]
+        <h3>Создать новую беседу</h3>[cite: 12]
+        <button onclick="hideCreateGroupModal()" class="modal-close">&times;</button>[cite: 12]
       </div>
-      <div class="modal-body">
-        <input type="text" id="groupName" placeholder="Название беседы" class="modal-input">
-        <div class="group-participants">
-          <h4>Выберите участников:</h4>
-          <input type="text" id="searchUsersInCreate" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersInCreate()">
-          <div id="usersListModal" class="users-checkbox-list">
-            <div class="no-users">Начните вводить имя для поиска</div>
+      <div class="modal-body">[cite: 12]
+        <input type="text" id="groupName" placeholder="Название беседы" class="modal-input">[cite: 12]
+        <div class="group-participants">[cite: 12]
+          <h4>Выберите участников:</h4>[cite: 12]
+          <input type="text" id="searchUsersInCreate" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersInCreate()">[cite: 12]
+          <div id="usersListModal" class="users-checkbox-list">[cite: 12]
+            <div class="no-users">Начните вводить имя для поиска</div>[cite: 12]
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button onclick="hideCreateGroupModal()" class="modal-cancel-btn">Отмена</button>
-        <button onclick="createGroupChat()" class="modal-save-btn">Создать</button>
+      <div class="modal-footer">[cite: 12]
+        <button onclick="hideCreateGroupModal()" class="modal-cancel-btn">Отмена</button>[cite: 12]
+        <button onclick="createGroupChat()" class="modal-save-btn">Создать</button>[cite: 12]
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно информации о беседе -->
-  <div id="groupInfoModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="groupInfoName">Информация о беседе</h3>
-        <button onclick="hideGroupInfoModal()" class="modal-close">&times;</button>
+  <!-- Модальное окно информации о беседе -->[cite: 12]
+  <div id="groupInfoModal" class="modal">[cite: 12]
+    <div class="modal-content">[cite: 12]
+      <div class="modal-header">[cite: 12]
+        <h3 id="groupInfoName">Информация о беседе</h3>[cite: 12]
+        <button onclick="hideGroupInfoModal()" class="modal-close">&times;</button>[cite: 12]
       </div>
-      <div class="modal-body">
-        <div class="group-info-section">
-          <h4>Участники:</h4>
-          <div id="groupParticipants" class="group-participants-list"></div>
-          <button onclick="leaveCurrentGroup()" id="leaveGroupBtn" class="modal-leave-btn" style="margin-top: 10px; width: 100%;">Покинуть беседу</button>
+      <div class="modal-body">[cite: 12]
+        <div class="group-info-section">[cite: 12]
+          <h4>Участники:</h4>[cite: 12]
+          <div id="groupParticipants" class="group-participants-list"></div>[cite: 12]
+          <button onclick="leaveCurrentGroup()" id="leaveGroupBtn" class="modal-leave-btn" style="margin-top: 10px; width: 100%;">Покинуть беседу</button>[cite: 12]
         </div>
-        <div class="group-info-section">
-          <h4>Добавить участников:</h4>
-          <input type="text" id="searchUsersToAdd" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersToAdd()">
-          <div id="addParticipantsList" class="users-checkbox-list">
-            <div class="no-users">Начните вводить имя для поиска</div>
+        <div class="group-info-section">[cite: 12]
+          <h4>Добавить участников:</h4>[cite: 12]
+          <input type="text" id="searchUsersToAdd" placeholder="Поиск пользователей..." class="search-input" onkeyup="searchUsersToAdd()">[cite: 12]
+          <div id="addParticipantsList" class="users-checkbox-list">[cite: 12]
+            <div class="no-users">Начните вводить имя для поиска</div>[cite: 12]
           </div>
-          <button onclick="addSelectedParticipants()" class="modal-save-btn" style="margin-top: 10px; width: 100%;">Добавить выбранных</button>
+          <button onclick="addSelectedParticipants()" class="modal-save-btn" style="margin-top: 10px; width: 100%;">Добавить выбранных</button>[cite: 12]
         </div>
       </div>
-      <div class="modal-footer">
-        <button onclick="hideGroupInfoModal()" class="modal-cancel-btn">Закрыть</button>
-        <button onclick="deleteCurrentGroup()" id="deleteGroupBtn" class="modal-delete-btn">Удалить беседу</button>
+      <div class="modal-footer">[cite: 12]
+        <button onclick="hideGroupInfoModal()" class="modal-cancel-btn">Закрыть</button>[cite: 12]
+        <button onclick="deleteCurrentGroup()" id="deleteGroupBtn" class="modal-delete-btn">Удалить беседу</button>[cite: 12]
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно для управления сообщением -->
-  <div id="messageOptionsModal" class="modal">
-    <div class="modal-content small">
-      <div class="modal-header">
-        <h3>Действия с сообщением</h3>
-        <button onclick="hideMessageOptions()" class="modal-close">&times;</button>
+  <!-- Модальное окно для управления сообщением -->[cite: 12]
+  <div id="messageOptionsModal" class="modal">[cite: 12]
+    <div class="modal-content small">[cite: 12]
+      <div class="modal-header">[cite: 12]
+        <h3>Действия с сообщением</h3>[cite: 12]
+        <button onclick="hideMessageOptions()" class="modal-close">&times;</button>[cite: 12]
       </div>
-      <div class="modal-body">
-        <button onclick="deleteMessageForMe()" class="modal-option-btn">Удалить у себя</button>
-        <button onclick="deleteMessageForEveryone()" id="deleteForEveryoneBtn" class="modal-option-btn delete">Удалить у всех</button>
+      <div class="modal-body">[cite: 12]
+        <button onclick="deleteMessageForMe()" class="modal-option-btn">Удалить у себя</button>[cite: 12]
+        <button onclick="deleteMessageForEveryone()" id="deleteForEveryoneBtn" class="modal-option-btn delete">Удалить у всех</button>[cite: 12]
       </div>
-      <div class="modal-footer">
-        <button onclick="hideMessageOptions()" class="modal-cancel-btn">Отмена</button>
+      <div class="modal-footer">[cite: 12]
+        <button onclick="hideMessageOptions()" class="modal-cancel-btn">Отмена</button>[cite: 12]
       </div>
     </div>
   </div>
