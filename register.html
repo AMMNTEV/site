@@ -5,11 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Регистрация</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
-  <link rel="stylesheet" href="css/common.css">
-  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="style.css">
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <style>
+    .tag-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .tag-input-wrapper span {
+      position: absolute;
+      left: 14px;
+      color: #666;
+      font-size: 1rem;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .tag-input-wrapper input {
+      padding-left: 30px !important;
+    }
+    .tag-status {
+      font-size: 0.8rem;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tag-status.available { color: #10b981; }
+    .tag-status.unavailable { color: #ef4444; }
+    .tag-status.loading { color: #6b7280; }
+  </style>
 </head>
 <body class="auth-page">
   <div class="auth-card">
@@ -46,14 +73,30 @@
     <div id="message" class="message"></div>
   </div>
 
-  <script src="js/firebase-config.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="firebase-config.js"></script>
   <script>
     let tagCheckTimeout = null;
     let isTagAvailable = false;
     let currentTagValue = '';
 
-    // Проверка уникальности тега (вызывается из oninput)
+    function handleTagInput(input) {
+      let value = input.value.replace(/@/g, '').slice(0, 20);
+      value = value.replace(/[^a-zA-Z0-9_]/g, '');
+      input.value = value;
+    }
+
+    function preventAtSymbolDeletion(event, input) {
+      if (event.key === 'Backspace' && input.selectionStart === 0 && input.selectionEnd === 0) {
+        event.preventDefault();
+      }
+      if (event.key === 'Delete' && input.selectionStart === 0 && input.selectionEnd === 1) {
+        event.preventDefault();
+      }
+      if (event.key === 'ArrowLeft' && input.selectionStart === 0 && input.selectionEnd === 0) {
+        event.preventDefault();
+      }
+    }
+
     async function checkTagUnique(input) {
       const tagValue = input.value.trim();
       const tagStatus = document.getElementById('tagStatus');
@@ -82,8 +125,9 @@
       tagCheckTimeout = setTimeout(async () => {
         if (currentTagValue !== tagValue) return;
         try {
-          const available = await checkTagUnique(tagValue);
-          if (available) {
+          const fullTag = '@' + tagValue;
+          const snapshot = await db.collection('users').where('tag', '==', fullTag).get();
+          if (snapshot.empty) {
             tagStatus.innerHTML = '✅ Тег доступен';
             tagStatus.className = 'tag-status available';
             isTagAvailable = true;
@@ -106,20 +150,45 @@
 
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!isTagAvailable) { alert('Пожалуйста, выберите другой тег'); return; }
+      if (!isTagAvailable) {
+        alert('Пожалуйста, выберите другой тег');
+        return;
+      }
 
       const nickname = document.getElementById('nickname').value;
-      const tag = '@' + document.getElementById('tag').value.trim();
+      let tag = document.getElementById('tag').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const registerBtn = document.getElementById('registerBtn');
       const messageDiv = document.getElementById('message');
 
+      tag = '@' + tag;
+
       registerBtn.disabled = true;
       registerBtn.textContent = 'Регистрация...';
 
       try {
-        await register(email, password, nickname, tag);
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+
+        await user.updateProfile({
+          displayName: nickname + '|' + tag
+        });
+
+        // ✅ СОЗДАЁМ ДОКУМЕНТ ПОЛЬЗОВАТЕЛЯ В FIRESTORE
+        await db.collection('users').doc(user.uid).set({
+          nickname: nickname,
+          tag: tag,
+          email: email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await user.sendEmailVerification({
+          url: window.location.origin + '/index.html'
+        });
+
+        await auth.signOut();
+
         messageDiv.innerHTML = `
           <div class="success">
             <h3>✅ Регистрация успешна!</h3>
@@ -129,6 +198,7 @@
           </div>
         `;
         document.getElementById('registerForm').style.display = 'none';
+
       } catch (error) {
         console.error('Ошибка регистрации:', error);
         registerBtn.disabled = false;
