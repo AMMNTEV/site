@@ -73,7 +73,8 @@
     <div id="message" class="message"></div>
   </div>
 
-  <script src="firebase-config.js"></script>
+  <!-- ✅ ПУТЬ ИСПРАВЛЕН -->
+  <script src="js/firebase-config.js"></script>
   <script>
     let tagCheckTimeout = null;
     let isTagAvailable = false;
@@ -125,8 +126,14 @@
       tagCheckTimeout = setTimeout(async () => {
         if (currentTagValue !== tagValue) return;
         try {
+          // 🔍 Проверяем, что db существует
+          if (typeof db === 'undefined') {
+            throw new Error('Firestore не инициализирован. Проверьте путь к firebase-config.js');
+          }
+
           const fullTag = '@' + tagValue;
           const snapshot = await db.collection('users').where('tag', '==', fullTag).get();
+
           if (snapshot.empty) {
             tagStatus.innerHTML = '✅ Тег доступен';
             tagStatus.className = 'tag-status available';
@@ -139,8 +146,8 @@
             registerBtn.disabled = true;
           }
         } catch (error) {
-          console.error('Ошибка проверки тега:', error);
-          tagStatus.innerHTML = '❌ Ошибка проверки';
+          console.error('Детали ошибки проверки тега:', error);
+          tagStatus.innerHTML = '❌ Ошибка: ' + (error.message || 'проверьте консоль');
           tagStatus.className = 'tag-status unavailable';
           isTagAvailable = false;
           registerBtn.disabled = true;
@@ -175,7 +182,6 @@
           displayName: nickname + '|' + tag
         });
 
-        // ✅ СОЗДАЁМ ДОКУМЕНТ ПОЛЬЗОВАТЕЛЯ В FIRESTORE
         await db.collection('users').doc(user.uid).set({
           nickname: nickname,
           tag: tag,
