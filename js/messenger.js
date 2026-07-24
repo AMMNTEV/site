@@ -557,7 +557,7 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ ==========
+// ========== ЗАГРУЗКА СООБЩЕНИЙ (ИСПРАВЛЕННАЯ) ==========
 async function loadMessages(showLoading = false) {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
@@ -575,19 +575,16 @@ async function loadMessages(showLoading = false) {
     snapshot = await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .orderBy('timestamp', 'asc')
-      .get({ source: 'cache' });
-  } catch (e) {
-    snapshot = null;
-  }
-
-  if (!snapshot || snapshot.empty) {
+      .get({ source: 'server' });
+  } catch (error) {
+    console.warn('Ошибка загрузки с сервера, пробуем кэш:', error);
     try {
       snapshot = await db.collection('chats').doc(currentChatId)
         .collection('messages')
         .orderBy('timestamp', 'asc')
-        .get({ source: 'server' });
-    } catch (error) {
-      console.error('Ошибка загрузки сообщений:', error);
+        .get({ source: 'cache' });
+    } catch (e) {
+      console.error('Ошибка загрузки сообщений:', e);
       if (showLoading) {
         messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
       }
@@ -719,7 +716,6 @@ async function loadMessages(showLoading = false) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
-  // Подписываемся на новые сообщения и изменения
   listenForMessages();
 }
 
@@ -731,11 +727,10 @@ function listenForMessages() {
     unsubscribeMessages = null;
   }
 
-  // Запоминаем дату последнего сообщения для добавления разделителей
   let lastDate = '';
-  const messagesContainer = document.getElementById('messagesContainer');
-  if (messagesContainer) {
-    const separators = messagesContainer.querySelectorAll('.date-separator');
+  const container = document.getElementById('messagesContainer');
+  if (container) {
+    const separators = container.querySelectorAll('.date-separator');
     if (separators.length > 0) {
       lastDate = separators[separators.length - 1].textContent;
     }
@@ -752,26 +747,20 @@ function listenForMessages() {
         const msg = change.doc.data();
         const msgId = change.doc.id;
 
-        // Обработка удаления (modified с deletedFor)
         if (change.type === 'modified' && msg.deletedFor) {
           if (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid)) {
             const el = document.getElementById(`msg-${msgId}`);
             if (el) {
               el.remove();
-              // Если сообщение было системным или не было других, пересчитываем разделители?
-              // Просто обновляем превью чата
               await updateChatPreviewAfterDelete(currentChatId, msg.deletedFor.includes('everyone'));
             }
           }
           return;
         }
 
-        // Обработка добавления новых сообщений
         if (change.type === 'added') {
           if (document.getElementById(`msg-${msgId}`)) return;
 
-          // Отмечаем как прочитанное, если мы в чате
-          let isRead = false;
           if (selectedChat.isGroup) {
             if (msg.senderId !== currentUser.uid && !msg.isSystem) {
               if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
@@ -826,12 +815,10 @@ function listenForMessages() {
             messageDate = date.toLocaleDateString();
           }
 
-          // Добавляем разделитель, только если сообщение не системное и дата отличается
           if (!msg.isSystem && messageDate && messageDate !== lastDate) {
             const separator = document.createElement('div');
             separator.className = 'date-separator';
             separator.textContent = messageDate;
-            // Вставляем перед последним элементом, если он есть, иначе в конец
             if (container.lastElementChild) {
               container.insertBefore(separator, container.lastElementChild);
             } else {
@@ -853,7 +840,6 @@ function listenForMessages() {
           container.scrollTop = container.scrollHeight;
         }
 
-        // Обработка полного удаления документа (removed)
         if (change.type === 'removed') {
           const el = document.getElementById(`msg-${msgId}`);
           if (el) {
@@ -905,7 +891,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ОТПРАВКА СООБЩЕНИЯ ==========
+// ========== ОТПРАВКА СООБЩЕНИЯ (БЕЗ ПЕРЕЗАГРУЗКИ) ==========
 async function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
@@ -941,7 +927,6 @@ async function sendMessage() {
         lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-      await loadMessages(false);
       updateChatHeader(selectedChat);
       saveCache();
       return;
@@ -966,7 +951,21 @@ async function sendMessage() {
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    await loadMessages(false);
+    // Обновляем превью в списке чатов вручную
+    const chatIndex = allChats.findIndex(c => c.id === currentChatId);
+    if (chatIndex !== -1) {
+      allChats[chatIndex].lastMessage = text;
+      allChats[chatIndex].lastMessageTime = new Date();
+      allChats.sort((a, b) => {
+        const unreadA = unreadCounts[a.id] || 0;
+        const unreadB = unreadCounts[b.id] || 0;
+        if (unreadB !== unreadA) return unreadB - unreadA;
+        const timeA = a.lastMessageTime || a.createdAt || new Date(0);
+        const timeB = b.lastMessageTime || b.createdAt || new Date(0);
+        return timeB - timeA;
+      });
+      displayChats(allChats);
+    }
     saveCache();
 
   } catch (error) {
@@ -1217,7 +1216,6 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    // Слушатель сам удалит сообщение из DOM и обновит превью
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
@@ -1235,7 +1233,6 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
-    // Слушатель сам удалит сообщение из DOM у всех и обновит превью
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
