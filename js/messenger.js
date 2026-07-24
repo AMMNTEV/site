@@ -32,11 +32,31 @@ function saveCache() {
   }
 }
 
+// ========== ЗАГРУЗКА КЭША (СИНХРОННО) ==========
+function loadCachedChats() {
+  if (!currentUser) return false;
+  const cachedChats = localStorage.getItem(CACHE_CHATS_KEY);
+  if (cachedChats) {
+    try {
+      const parsed = JSON.parse(cachedChats);
+      if (parsed.uid === currentUser.uid && parsed.data) {
+        allChats = parsed.data;
+        const cachedUnread = localStorage.getItem(CACHE_UNREAD_KEY);
+        if (cachedUnread) {
+          unreadCounts = JSON.parse(cachedUnread);
+        }
+        displayChats(allChats);
+        return true;
+      }
+    } catch (e) { /* игнорируем */ }
+  }
+  return false;
+}
+
 // ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ (с кэшем) ==========
 async function loadAllUsers(force = false) {
   if (!currentUser) return;
   try {
-    // Сначала пробуем кэш
     if (!force) {
       const cached = localStorage.getItem(CACHE_USERS_KEY);
       if (cached) {
@@ -100,12 +120,13 @@ function listenForChats() {
   if (!currentUser) return;
   if (unsubscribeChats) unsubscribeChats();
 
-  // Сразу показываем кэш (если есть)
+  // Если кэш ещё не был показан, показываем его сейчас
+  // (на случай, если loadCachedChats не сработал)
   const cachedChats = localStorage.getItem(CACHE_CHATS_KEY);
   if (cachedChats) {
     try {
       const parsed = JSON.parse(cachedChats);
-      if (parsed.uid === currentUser.uid && parsed.data) {
+      if (parsed.uid === currentUser.uid && parsed.data && allChats.length === 0) {
         allChats = parsed.data;
         const cachedUnread = localStorage.getItem(CACHE_UNREAD_KEY);
         if (cachedUnread) {
@@ -1196,7 +1217,18 @@ onAuthStateChanged(async (user) => {
     return;
   }
   currentUser = user;
-  await loadAllUsers(false); // загружаем пользователей с кэшем
+
+  // 1. Сразу показываем кэш (синхронно)
+  const hasCache = loadCachedChats();
+
+  // 2. Загружаем пользователей (асинхронно)
+  await loadAllUsers(false);
   await loadAllUsersForModal();
-  listenForChats(); // сразу показывает кэш, затем обновляется
+
+  // 3. Подписываемся на изменения чатов (если кэша не было, то покажет "нет чатов" или загрузит)
+  //    Если кэш уже показан, то слушатель обновит его бесшумно
+  listenForChats();
+
+  // Если кэша не было, можно показать индикатор загрузки, но он уже есть в HTML
+  // Мы его уберём при первом обновлении
 });
