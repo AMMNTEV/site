@@ -373,7 +373,7 @@ async function selectChat(chat) {
   updateChatHeader(chat);
   document.getElementById('messageInputArea').style.display = 'flex';
 
-  await loadMessages(true); // showLoading = true
+  await loadMessages(true);
 
   if (window.innerWidth <= 768) {
     enterChatMode();
@@ -455,6 +455,7 @@ async function loadMessages(showLoading = false) {
     unsubscribeMessages();
     unsubscribeMessages = null;
   }
+
   if (showLoading) {
     messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
   }
@@ -474,12 +475,13 @@ async function loadMessages(showLoading = false) {
       visibleMessages.push({ id: doc.id, ...msg });
     });
 
+    const scrollTop = messagesContainer.scrollTop;
+
     if (visibleMessages.length === 0) {
       messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
       return;
     }
 
-    // Загружаем отправителей для групповых чатов
     const senderIds = new Set();
     visibleMessages.forEach(msg => {
       if (!msg.isSystem && selectedChat.isGroup && msg.senderId !== currentUser.uid) {
@@ -501,7 +503,6 @@ async function loadMessages(showLoading = false) {
       }
     }
 
-    // Отмечаем непрочитанные
     const batch = db.batch();
     let hasUnread = false;
     visibleMessages.forEach(msg => {
@@ -535,69 +536,63 @@ async function loadMessages(showLoading = false) {
       }
     }
 
-    // Строим HTML
     let html = '';
     let lastDate = '';
-    // Проверяем, есть ли не-системные сообщения
     const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
     if (nonSystemMessages.length === 0) {
-      // Только системные – выводим их без разделителей
       visibleMessages.forEach(msg => {
         if (msg.isSystem) {
           html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
         }
       });
-      messagesContainer.innerHTML = html;
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      listenForNewMessages();
-      return;
+    } else {
+      visibleMessages.forEach(msg => {
+        const isMyMessage = msg.senderId === currentUser.uid;
+        let time = '';
+        let messageDate = '';
+        if (msg.timestamp) {
+          const date = msg.timestamp.toDate();
+          time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          messageDate = date.toLocaleDateString();
+        }
+        if (!msg.isSystem && messageDate && messageDate !== lastDate) {
+          html += `<div class="date-separator">${messageDate}</div>`;
+          lastDate = messageDate;
+        }
+        if (msg.isSystem) {
+          html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
+          return;
+        }
+        let senderInfo = '';
+        if (selectedChat.isGroup && !isMyMessage) {
+          const sender = senderCache[msg.senderId];
+          if (sender) {
+            senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
+          }
+        }
+        const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
+        html += `
+          <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
+            ${deleteOption}
+            ${senderInfo}
+            <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      });
     }
 
-    // Есть не-системные – выводим с разделителями для них
-    visibleMessages.forEach(msg => {
-      const isMyMessage = msg.senderId === currentUser.uid;
-      let time = '';
-      let messageDate = '';
-      if (msg.timestamp) {
-        const date = msg.timestamp.toDate();
-        time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        messageDate = date.toLocaleDateString();
-      }
-      if (!msg.isSystem && messageDate && messageDate !== lastDate) {
-        html += `<div class="date-separator">${messageDate}</div>`;
-        lastDate = messageDate;
-      }
-      if (msg.isSystem) {
-        html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
-        return;
-      }
-      let senderInfo = '';
-      if (selectedChat.isGroup && !isMyMessage) {
-        const sender = senderCache[msg.senderId];
-        if (sender) {
-          senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
-        }
-      }
-      const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
-      html += `
-        <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
-          ${deleteOption}
-          ${senderInfo}
-          <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
-          <div class="message-time">${time}</div>
-        </div>
-      `;
-    });
     messagesContainer.innerHTML = html;
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (scrollTop > 0) {
+      messagesContainer.scrollTop = scrollTop;
+    } else {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
 
     listenForNewMessages();
   } catch (error) {
     console.error('Ошибка загрузки сообщений:', error);
-    if (!showLoading) {
-      // Если была ошибка при обновлении, покажем её
-      messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
-    } else {
+    if (showLoading) {
       messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
     }
   }
@@ -1014,7 +1009,7 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    await loadMessages(false); // обновляем без индикатора загрузки
+    await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, false);
     hideMessageOptions();
   } catch (error) {
