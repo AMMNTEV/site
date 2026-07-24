@@ -18,6 +18,17 @@ const CACHE_CHATS_KEY = 'messenger_chats_cache';
 const CACHE_USERS_KEY = 'messenger_users_cache';
 const CACHE_UNREAD_KEY = 'messenger_unread_cache';
 
+// ========== СОХРАНЕНИЕ КЭША ==========
+function saveCache() {
+  if (!currentUser) return;
+  localStorage.setItem(CACHE_CHATS_KEY, JSON.stringify({
+    uid: currentUser.uid,
+    data: allChats,
+    timestamp: Date.now()
+  }));
+  localStorage.setItem(CACHE_UNREAD_KEY, JSON.stringify(unreadCounts));
+}
+
 // ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ (с кэшем) ==========
 async function loadAllUsers(force = false) {
   if (!currentUser) return;
@@ -221,14 +232,6 @@ function listenForChats() {
           return timeB - timeA;
         });
 
-        // Сохраняем кэш
-        localStorage.setItem(CACHE_CHATS_KEY, JSON.stringify({
-          uid: currentUser.uid,
-          data: allChats,
-          timestamp: Date.now()
-        }));
-        localStorage.setItem(CACHE_UNREAD_KEY, JSON.stringify(unreadCounts));
-
         if (!isNewChatPending) {
           displayChats(allChats);
         } else {
@@ -264,6 +267,9 @@ function displayChats(chats) {
       </div>
     `;
   }).join('');
+
+  // Сохраняем кэш после обновления списка
+  saveCache();
 
   const searchInput = document.getElementById('searchInput');
   if (searchInput && searchInput.value.trim() !== '') {
@@ -488,6 +494,8 @@ async function markMessagesAsRead(chatId) {
     });
     await batch.commit();
     unreadCounts[chatId] = 0;
+    // Сохраняем кэш после обновления непрочитанных
+    saveCache();
     const chatElement = document.querySelector(`.chat-item[onclick*='${chatId}']`);
     if (chatElement) {
       chatElement.classList.remove('has-unread');
@@ -517,17 +525,14 @@ async function loadMessages(showLoading = false) {
 
   let snapshot;
   try {
-    // Сначала пытаемся из кэша
     snapshot = await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .orderBy('timestamp', 'asc')
       .get({ source: 'cache' });
   } catch (e) {
-    // Если ошибка, идём на сервер
     snapshot = null;
   }
 
-  // Если кэш пуст или его нет, идём на сервер
   if (!snapshot || snapshot.empty) {
     try {
       snapshot = await db.collection('chats').doc(currentChatId)
@@ -604,6 +609,7 @@ async function loadMessages(showLoading = false) {
   if (hasUnread) {
     await batch.commit();
     unreadCounts[currentChatId] = 0;
+    saveCache();
     const chatElement = document.querySelector(`.chat-item[onclick*='${currentChatId}']`);
     if (chatElement) {
       chatElement.classList.remove('has-unread');
