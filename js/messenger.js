@@ -17,6 +17,23 @@ const CACHE_CHATS_KEY = 'messenger_chats_cache';
 const CACHE_USERS_KEY = 'messenger_users_cache';
 const CACHE_UNREAD_KEY = 'messenger_unread_cache';
 
+// Таймер для индикатора загрузки
+let loadingTimer = null;
+
+// ========== УПРАВЛЕНИЕ ИНДИКАТОРОМ ЗАГРУЗКИ ==========
+function showLoadingIndicator(show) {
+  const chatsList = document.getElementById('chatsList');
+  if (!chatsList) return;
+  if (show) {
+    if (!chatsList.querySelector('.loading')) {
+      chatsList.innerHTML = '<div class="loading">Загрузка чатов...</div>';
+    }
+  } else {
+    const loadingEl = chatsList.querySelector('.loading');
+    if (loadingEl) loadingEl.remove();
+  }
+}
+
 // ========== СОХРАНЕНИЕ КЭША ==========
 function saveCache() {
   if (!currentUser) return;
@@ -133,6 +150,12 @@ function listenForChats() {
           unreadCounts = JSON.parse(cachedUnread);
         }
         displayChats(allChats);
+        // Если был таймер – отменяем, т.к. кэш уже показан
+        if (loadingTimer) {
+          clearTimeout(loadingTimer);
+          loadingTimer = null;
+        }
+        showLoadingIndicator(false);
       }
     } catch (e) { /* игнорируем */ }
   }
@@ -143,6 +166,13 @@ function listenForChats() {
     .onSnapshot(snapshot => {
       const chatsList = document.getElementById('chatsList');
       if (!chatsList) return;
+
+      // Скрываем индикатор загрузки, если он был
+      if (loadingTimer) {
+        clearTimeout(loadingTimer);
+        loadingTimer = null;
+      }
+      showLoadingIndicator(false);
 
       if (snapshot.empty) {
         chatsList.innerHTML = '<div class="no-chats">У вас пока нет чатов. Найдите пользователя через поиск.</div>';
@@ -521,7 +551,7 @@ async function markMessagesAsRead(chatId) {
     });
     await batch.commit();
     unreadCounts[chatId] = 0;
-    saveCache(); // сохраняем кэш
+    saveCache();
     const chatElement = document.querySelector(`.chat-item[onclick*='${chatId}']`);
     if (chatElement) {
       chatElement.classList.remove('has-unread');
@@ -536,7 +566,7 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ (с кэшем Firestore) ==========
+// ========== ЗАГРУЗКА СООБЩЕНИЙ ==========
 async function loadMessages(showLoading = false) {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
@@ -549,7 +579,6 @@ async function loadMessages(showLoading = false) {
     messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
   }
 
-  // Сначала пробуем кэш Firestore, затем сервер
   let snapshot;
   try {
     snapshot = await db.collection('chats').doc(currentChatId)
@@ -591,7 +620,6 @@ async function loadMessages(showLoading = false) {
     return;
   }
 
-  // Загружаем отправителей для групповых чатов
   const senderIds = new Set();
   visibleMessages.forEach(msg => {
     if (!msg.isSystem && selectedChat.isGroup && msg.senderId !== currentUser.uid) {
@@ -613,7 +641,6 @@ async function loadMessages(showLoading = false) {
     }
   }
 
-  // Отмечаем непрочитанные
   const batch = db.batch();
   let hasUnread = false;
   visibleMessages.forEach(msg => {
@@ -648,7 +675,6 @@ async function loadMessages(showLoading = false) {
     }
   }
 
-  // Строим HTML
   let html = '';
   let lastDate = '';
   const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
@@ -1187,7 +1213,7 @@ function toggleMobileMenu() {
   overlay.classList.toggle('active');
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
 window.addEventListener('load', function() {
   if (window.innerWidth <= 768) {
     document.body.classList.remove('chat-mode');
@@ -1197,6 +1223,7 @@ window.addEventListener('load', function() {
     if (chatsSidebar) chatsSidebar.style.display = 'flex';
   }
 });
+
 window.addEventListener('resize', function() {
   if (window.innerWidth > 768) {
     document.body.classList.remove('chat-mode');
@@ -1210,7 +1237,7 @@ window.addEventListener('resize', function() {
   }
 });
 
-// Запускаем прослушивание чатов после загрузки данных
+// Запуск после авторизации
 onAuthStateChanged(async (user) => {
   if (!user || !user.emailVerified) {
     window.location.href = 'index.html';
@@ -1221,14 +1248,17 @@ onAuthStateChanged(async (user) => {
   // 1. Сразу показываем кэш (синхронно)
   const hasCache = loadCachedChats();
 
-  // 2. Загружаем пользователей (асинхронно)
+  // 2. Если кэша нет – запускаем таймер для индикатора загрузки
+  if (!hasCache) {
+    loadingTimer = setTimeout(() => {
+      showLoadingIndicator(true);
+    }, 300);
+  }
+
+  // 3. Загружаем пользователей (асинхронно)
   await loadAllUsers(false);
   await loadAllUsersForModal();
 
-  // 3. Подписываемся на изменения чатов (если кэша не было, то покажет "нет чатов" или загрузит)
-  //    Если кэш уже показан, то слушатель обновит его бесшумно
+  // 4. Подписываемся на изменения чатов (придёт реальные данные и скроет индикатор)
   listenForChats();
-
-  // Если кэша не было, можно показать индикатор загрузки, но он уже есть в HTML
-  // Мы его уберём при первом обновлении
 });
