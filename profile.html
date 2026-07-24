@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>Мой профиль</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>">
   <link rel="stylesheet" href="css/common.css">
@@ -10,43 +10,166 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <style>
+    /* Базовые стили для нового каркаса на основе изображение.jpg */
+    .app-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #fff;
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 60px; /* Отступ для нижней панели */
+    }
+    .profile-cover {
+      height: 180px;
+      background: linear-gradient(to bottom, #555, #222); /* Заглушка для фото обложки */
+      position: relative;
+    }
+    .back-btn-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(5px);
+      color: #fff;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 20px;
+    }
+    .profile-main {
+      padding: 0 20px;
+      margin-top: -45px;
+      position: relative;
+    }
+    .avatar-large {
+      width: 90px;
+      height: 90px;
+      border-radius: 24px; /* Квадрат со скруглениями как на референсе */
+      border: 4px solid #fff;
+      background: #000;
+      overflow: hidden;
+    }
+    .profile-top-actions {
+      position: absolute;
+      right: 20px;
+      top: 55px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-rounded {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      background: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .profile-tabs {
+      display: flex;
+      border-bottom: 1px solid #eee;
+      margin-top: 20px;
+      padding: 0 20px;
+    }
+    .tab {
+      padding: 10px 15px;
+      font-weight: 600;
+      color: #777;
+      cursor: pointer;
+    }
+    .tab.active {
+      color: #000;
+      border-bottom: 2px solid #000;
+    }
+    
+    /* Стили нижней панели (только для мобилок) */
+    .mobile-bottom-nav {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid #eee;
+        justify-content: space-around;
+        padding: 15px 0;
+        padding-bottom: env(safe-area-inset-bottom, 15px);
+        z-index: 1000;
+      }
+      .nav-item {
+        text-decoration: none;
+        color: #000;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 50px;
+      }
+      /* Скрываем старое бургер-меню глобально для мобильной версии */
+      .mobile-menu-btn, .mobile-popup-menu, .sidebar-overlay {
+        display: none !important; 
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="profile-container">
-    <div class="profile-header">
-      <a href="messenger.html" class="back-btn"><</a>
-      <button onclick="logout()" class="logout-small-header">Выйти</button>
+  <div class="app-container">
+    <div class="profile-cover">
+      <a href="messenger.html" class="back-btn-overlay">‹</a>
     </div>
-    <div class="profile-two-columns">
-      <div class="profile-left">
-        <div class="profile-card">
-          <div class="profile-avatar-placeholder">
-            <div class="avatar-large" id="profileAvatar">
-              <div class="skeleton-circle"></div>
-            </div>
-          </div>
-          <div class="profile-info" id="profileInfo">
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-          </div>
-        </div>
+    
+    <div class="profile-main">
+      <div id="profileAvatar" class="avatar-large">
+        <div class="skeleton-circle" style="width:100%; height:100%; border-radius: 20px;"></div>
       </div>
-      <div class="profile-right">
-        <div class="posts-header">
-          <h2>Мои посты</h2>
-          <button onclick="showCreatePostModal()" class="create-post-btn">+ Новый пост</button>
-        </div>
-        <div class="posts-container" id="postsContainer">
-          <div class="skeleton-post"></div>
-          <div class="skeleton-post"></div>
-          <div class="skeleton-post"></div>
-        </div>
+      
+      <div class="profile-top-actions">
+        <!-- Кнопка почты/настроек и выхода -->
+        <button class="btn-rounded">⚙️</button>
+        <button onclick="logout()" class="btn-rounded">Выйти</button>
       </div>
+
+      <div class="profile-info" id="profileInfo" style="margin-top: 15px;">
+        <h2 style="margin: 0; font-size: 24px;">Ваше Имя</h2>
+        <p style="color: #666; margin: 2px 0 10px 0;">@username</p>
+        <div style="font-size: 14px; margin-bottom: 15px;">
+          <b>0</b> Following &nbsp;&nbsp; <b>0</b> Followers
+        </div>
+        <p style="font-size: 14px; line-height: 1.4;">Описание профиля...</p>
+      </div>
+    </div>
+
+    <div class="profile-tabs">
+      <div class="tab active">Posts</div>
+      <div class="tab">Replies</div>
+      <div class="tab">Media</div>
+      <div class="tab">Likes</div>
+    </div>
+
+    <div class="posts-container" id="postsContainer" style="padding: 20px;">
+      <button onclick="showCreatePostModal()" class="btn-rounded" style="width: 100%; margin-bottom: 20px;">+ Новый пост</button>
+      <!-- Скелетоны постов -->
+      <div class="skeleton-post"></div>
+      <div class="skeleton-post"></div>
     </div>
   </div>
 
-  <!-- Модальное окно для создания поста -->
+  <!-- Новая нижняя панель (мобильная) -->
+  <nav class="mobile-bottom-nav">
+    <a href="profile.html" class="nav-item">👤</a>
+    <a href="messenger.html" class="nav-item">💬</a>
+  </nav>
+
+  <!-- Модальное окно создания поста (осталось без изменений) -->
   <div id="postModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
