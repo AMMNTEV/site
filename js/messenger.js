@@ -11,11 +11,28 @@ let selectedMessageId = null;
 let unreadCounts = {};
 let isCreatingGroup = false;
 let isNewChatPending = false;
+let isFirstLoad = true;
 
-// ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ ==========
-async function loadAllUsers() {
+// Ключи для localStorage
+const CACHE_CHATS_KEY = 'messenger_chats_cache';
+const CACHE_USERS_KEY = 'messenger_users_cache';
+const CACHE_UNREAD_KEY = 'messenger_unread_cache';
+
+// ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ (с кэшем) ==========
+async function loadAllUsers(force = false) {
   if (!currentUser) return;
   try {
+    if (!force) {
+      const cached = localStorage.getItem(CACHE_USERS_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.uid === currentUser.uid && parsed.data) {
+          allUsers = parsed.data;
+          return;
+        }
+      }
+    }
+
     const snapshot = await db.collection('users').get();
     allUsers = [];
     snapshot.forEach(doc => {
@@ -23,32 +40,39 @@ async function loadAllUsers() {
         allUsers.push({ id: doc.id, ...doc.data() });
       }
     });
+
+    localStorage.setItem(CACHE_USERS_KEY, JSON.stringify({
+      uid: currentUser.uid,
+      data: allUsers,
+      timestamp: Date.now()
+    }));
   } catch (error) {
     console.error('Ошибка загрузки пользователей:', error);
   }
 }
 
+// ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ ДЛЯ МОДАЛКИ ==========
 async function loadAllUsersForModal() {
-  if (!currentUser) return;
-  try {
-    const snapshot = await db.collection('users').get();
-    allUsersForModal = [];
-    snapshot.forEach(doc => {
-      if (doc.id !== currentUser.uid) {
-        allUsersForModal.push({ id: doc.id, ...doc.data() });
-      }
-    });
-  } catch (error) {
-    console.error('Ошибка загрузки пользователей:', error);
-  }
+  allUsersForModal = allUsers.filter(u => u.id !== currentUser.uid);
 }
 
+// ========== ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЯ ПО ID ==========
 async function getUserById(userId) {
   if (userCache.has(userId)) return userCache.get(userId);
+  const found = allUsers.find(u => u.id === userId);
+  if (found) {
+    userCache.set(userId, found);
+    return found;
+  }
   try {
     const doc = await db.collection('users').doc(userId).get();
     const data = doc.exists ? doc.data() : null;
-    if (data) userCache.set(userId, data);
+    if (data) {
+      userCache.set(userId, data);
+      if (!allUsers.find(u => u.id === userId)) {
+        allUsers.push({ id: userId, ...data });
+      }
+    }
     return data;
   } catch (error) {
     console.error('Ошибка загрузки пользователя:', error);
@@ -56,11 +80,29 @@ async function getUserById(userId) {
   }
 }
 
-// ========== ПРОСЛУШИВАНИЕ ЧАТОВ ==========
+// ========== ПРОСЛУШИВАНИЕ ЧАТОВ (с кэшем) ==========
 function listenForChats() {
   if (!currentUser) return;
   if (unsubscribeChats) unsubscribeChats();
 
+  // Показываем кэш сразу
+  const cachedChats = localStorage.getItem(CACHE_CHATS_KEY);
+  if (cachedChats) {
+    try {
+      const parsed = JSON.parse(cachedChats);
+      if (parsed.uid === currentUser.uid && parsed.data) {
+        allChats = parsed.data;
+        const cachedUnread = localStorage.getItem(CACHE_UNREAD_KEY);
+        if (cachedUnread) {
+          unreadCounts = JSON.parse(cachedUnread);
+        }
+        displayChats(allChats);
+        isFirstLoad = false;
+      }
+    } catch (e) { /* игнорируем */ }
+  }
+
+  // Реальный слушатель
   unsubscribeChats = db.collection('chats')
     .where('participants', 'array-contains', currentUser.uid)
     .onSnapshot(snapshot => {
@@ -70,6 +112,7 @@ function listenForChats() {
       if (snapshot.empty) {
         chatsList.innerHTML = '<div class="no-chats">У вас пока нет чатов. Найдите пользователя через поиск.</div>';
         allChats = [];
+        localStorage.removeItem(CACHE_CHATS_KEY);
         if (!isNewChatPending) {
           displayChats(allChats);
         }
@@ -177,6 +220,15 @@ function listenForChats() {
           const timeB = b.lastMessageTime || b.createdAt || new Date(0);
           return timeB - timeA;
         });
+
+        // Сохраняем кэш
+        localStorage.setItem(CACHE_CHATS_KEY, JSON.stringify({
+          uid: currentUser.uid,
+          data: allChats,
+          timestamp: Date.now()
+        }));
+        localStorage.setItem(CACHE_UNREAD_KEY, JSON.stringify(unreadCounts));
+
         if (!isNewChatPending) {
           displayChats(allChats);
         } else {
@@ -193,6 +245,7 @@ function listenForChats() {
     }, error => console.error('Ошибка прослушивания чатов:', error));
 }
 
+// ========== ОТОБРАЖЕНИЕ СПИСКА ЧАТОВ ==========
 function displayChats(chats) {
   const chatsList = document.getElementById('chatsList');
   chatsList.innerHTML = chats.map(chat => {
@@ -273,6 +326,7 @@ function searchAll() {
   document.getElementById('chatsList').innerHTML = resultsHTML;
 }
 
+// ========== ПОИСК В МОДАЛКАХ ==========
 function searchUsersInCreate() {
   const searchText = document.getElementById('searchUsersInCreate').value.toLowerCase();
   const usersList = document.getElementById('usersListModal');
@@ -307,7 +361,7 @@ function searchUsersToAdd() {
   addList.innerHTML = html;
 }
 
-// ========== СОЗДАНИЕ ЛИЧНОГО ЧАТА (ТОЛЬКО ПОИСК) ==========
+// ========== СОЗДАНИЕ ЛИЧНОГО ЧАТА ==========
 async function createPrivateChat(userId, nickname, tag) {
   try {
     const chatsSnapshot = await db.collection('chats')
@@ -384,6 +438,7 @@ async function selectChat(chat) {
   }
 }
 
+// ========== ОБНОВЛЕНИЕ ШАПКИ ЧАТА ==========
 function updateChatHeader(chat) {
   const chatHeader = document.getElementById('chatHeader');
   let headerContent = '';
@@ -415,7 +470,7 @@ function updateChatHeader(chat) {
   chatHeader.innerHTML = headerContent;
 }
 
-// ========== ОТМЕТКА ПРОЧИТАННЫХ (ТОЛЬКО ЛИЧНЫЕ) ==========
+// ========== ОТМЕТКА ПРОЧИТАННЫХ ==========
 async function markMessagesAsRead(chatId) {
   if (selectedChat && selectedChat.isGroup) return;
   try {
@@ -447,7 +502,7 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ МИГАНИЯ) ==========
+// ========== ЗАГРУЗКА СООБЩЕНИЙ (с кэшем Firestore) ==========
 async function loadMessages(showLoading = false) {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
@@ -460,142 +515,161 @@ async function loadMessages(showLoading = false) {
     messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
   }
 
+  let snapshot;
   try {
-    const snapshot = await db.collection('chats').doc(currentChatId)
+    // Сначала пытаемся из кэша
+    snapshot = await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .orderBy('timestamp', 'asc')
-      .get({ source: 'server' });
+      .get({ source: 'cache' });
+  } catch (e) {
+    // Если ошибка, идём на сервер
+    snapshot = null;
+  }
 
-    const visibleMessages = [];
-    snapshot.forEach(doc => {
-      const msg = doc.data();
-      if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) {
-        return;
+  // Если кэш пуст или его нет, идём на сервер
+  if (!snapshot || snapshot.empty) {
+    try {
+      snapshot = await db.collection('chats').doc(currentChatId)
+        .collection('messages')
+        .orderBy('timestamp', 'asc')
+        .get({ source: 'server' });
+    } catch (error) {
+      console.error('Ошибка загрузки сообщений:', error);
+      if (showLoading) {
+        messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
       }
-      visibleMessages.push({ id: doc.id, ...msg });
-    });
-
-    const scrollTop = messagesContainer.scrollTop;
-
-    if (visibleMessages.length === 0) {
-      messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
       return;
     }
+  }
 
-    const senderIds = new Set();
-    visibleMessages.forEach(msg => {
-      if (!msg.isSystem && selectedChat.isGroup && msg.senderId !== currentUser.uid) {
-        senderIds.add(msg.senderId);
-      }
-    });
-
-    const senderCache = {};
-    if (senderIds.size > 0) {
-      const userIds = Array.from(senderIds);
-      for (let i = 0; i < userIds.length; i += 10) {
-        const batch = userIds.slice(i, i + 10);
-        const usersSnapshot = await db.collection('users')
-          .where('__name__', 'in', batch)
-          .get();
-        usersSnapshot.forEach(doc => {
-          senderCache[doc.id] = doc.data();
-        });
-      }
+  const visibleMessages = [];
+  snapshot.forEach(doc => {
+    const msg = doc.data();
+    if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) {
+      return;
     }
+    visibleMessages.push({ id: doc.id, ...msg });
+  });
 
-    const batch = db.batch();
-    let hasUnread = false;
-    visibleMessages.forEach(msg => {
-      if (selectedChat.isGroup) {
-        if (msg.senderId !== currentUser.uid && !msg.isSystem) {
-          if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
-            hasUnread = true;
-            batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), {
-              readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-            });
-          }
-        }
-      } else {
-        if (msg.receiverId === currentUser.uid && !msg.read) {
-          hasUnread = true;
-          batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), { read: true });
-        }
-      }
-    });
-    if (hasUnread) {
-      await batch.commit();
-      unreadCounts[currentChatId] = 0;
-      const chatElement = document.querySelector(`.chat-item[onclick*='${currentChatId}']`);
-      if (chatElement) {
-        chatElement.classList.remove('has-unread');
-        const nameElement = chatElement.querySelector('.chat-name');
-        if (nameElement) {
-          const badge = nameElement.querySelector('.unread-badge');
-          if (badge) badge.remove();
-        }
-      }
+  const scrollTop = messagesContainer.scrollTop;
+
+  if (visibleMessages.length === 0) {
+    messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
+    return;
+  }
+
+  // Загружаем отправителей для групповых чатов
+  const senderIds = new Set();
+  visibleMessages.forEach(msg => {
+    if (!msg.isSystem && selectedChat.isGroup && msg.senderId !== currentUser.uid) {
+      senderIds.add(msg.senderId);
     }
+  });
 
-    let html = '';
-    let lastDate = '';
-    const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
-    if (nonSystemMessages.length === 0) {
-      visibleMessages.forEach(msg => {
-        if (msg.isSystem) {
-          html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
-        }
+  const senderCache = {};
+  if (senderIds.size > 0) {
+    const userIds = Array.from(senderIds);
+    for (let i = 0; i < userIds.length; i += 10) {
+      const batch = userIds.slice(i, i + 10);
+      const usersSnapshot = await db.collection('users')
+        .where('__name__', 'in', batch)
+        .get();
+      usersSnapshot.forEach(doc => {
+        senderCache[doc.id] = doc.data();
       });
-    } else {
-      visibleMessages.forEach(msg => {
-        const isMyMessage = msg.senderId === currentUser.uid;
-        let time = '';
-        let messageDate = '';
-        if (msg.timestamp) {
-          const date = msg.timestamp.toDate();
-          time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          messageDate = date.toLocaleDateString();
-        }
-        if (!msg.isSystem && messageDate && messageDate !== lastDate) {
-          html += `<div class="date-separator">${messageDate}</div>`;
-          lastDate = messageDate;
-        }
-        if (msg.isSystem) {
-          html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
-          return;
-        }
-        let senderInfo = '';
-        if (selectedChat.isGroup && !isMyMessage) {
-          const sender = senderCache[msg.senderId];
-          if (sender) {
-            senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
-          }
-        }
-        const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
-        html += `
-          <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
-            ${deleteOption}
-            ${senderInfo}
-            <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
-            <div class="message-time">${time}</div>
-          </div>
-        `;
-      });
-    }
-
-    messagesContainer.innerHTML = html;
-    if (scrollTop > 0) {
-      messagesContainer.scrollTop = scrollTop;
-    } else {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    listenForNewMessages();
-  } catch (error) {
-    console.error('Ошибка загрузки сообщений:', error);
-    if (showLoading) {
-      messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
     }
   }
+
+  // Отмечаем непрочитанные
+  const batch = db.batch();
+  let hasUnread = false;
+  visibleMessages.forEach(msg => {
+    if (selectedChat.isGroup) {
+      if (msg.senderId !== currentUser.uid && !msg.isSystem) {
+        if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
+          hasUnread = true;
+          batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), {
+            readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+          });
+        }
+      }
+    } else {
+      if (msg.receiverId === currentUser.uid && !msg.read) {
+        hasUnread = true;
+        batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), { read: true });
+      }
+    }
+  });
+  if (hasUnread) {
+    await batch.commit();
+    unreadCounts[currentChatId] = 0;
+    const chatElement = document.querySelector(`.chat-item[onclick*='${currentChatId}']`);
+    if (chatElement) {
+      chatElement.classList.remove('has-unread');
+      const nameElement = chatElement.querySelector('.chat-name');
+      if (nameElement) {
+        const badge = nameElement.querySelector('.unread-badge');
+        if (badge) badge.remove();
+      }
+    }
+  }
+
+  // Строим HTML
+  let html = '';
+  let lastDate = '';
+  const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
+  if (nonSystemMessages.length === 0) {
+    visibleMessages.forEach(msg => {
+      if (msg.isSystem) {
+        html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
+      }
+    });
+  } else {
+    visibleMessages.forEach(msg => {
+      const isMyMessage = msg.senderId === currentUser.uid;
+      let time = '';
+      let messageDate = '';
+      if (msg.timestamp) {
+        const date = msg.timestamp.toDate();
+        time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        messageDate = date.toLocaleDateString();
+      }
+      if (!msg.isSystem && messageDate && messageDate !== lastDate) {
+        html += `<div class="date-separator">${messageDate}</div>`;
+        lastDate = messageDate;
+      }
+      if (msg.isSystem) {
+        html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
+        return;
+      }
+      let senderInfo = '';
+      if (selectedChat.isGroup && !isMyMessage) {
+        const sender = senderCache[msg.senderId];
+        if (sender) {
+          senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
+        }
+      }
+      const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
+      html += `
+        <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
+          ${deleteOption}
+          ${senderInfo}
+          <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
+          <div class="message-time">${time}</div>
+        </div>
+      `;
+    });
+  }
+
+  messagesContainer.innerHTML = html;
+  if (scrollTop > 0) {
+    messagesContainer.scrollTop = scrollTop;
+  } else {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  listenForNewMessages();
 }
 
 // ========== СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ ==========
@@ -999,7 +1073,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (без мигания) ==========
+// ========== ФУНКЦИИ УДАЛЕНИЯ ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -1037,7 +1111,7 @@ async function deleteMessageForEveryone() {
   }
 }
 
-// ========== ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ (МОБИЛЬНЫЕ) ==========
+// ========== МОБИЛЬНЫЕ РЕЖИМЫ ==========
 function enterChatMode() {
   isChatMode = true;
   document.body.classList.add('chat-mode');
@@ -1076,7 +1150,7 @@ function toggleMobileMenu() {
   overlay.classList.toggle('active');
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
 window.addEventListener('load', function() {
   if (window.innerWidth <= 768) {
     document.body.classList.remove('chat-mode');
@@ -1086,6 +1160,7 @@ window.addEventListener('load', function() {
     if (chatsSidebar) chatsSidebar.style.display = 'flex';
   }
 });
+
 window.addEventListener('resize', function() {
   if (window.innerWidth > 768) {
     document.body.classList.remove('chat-mode');
@@ -1099,14 +1174,14 @@ window.addEventListener('resize', function() {
   }
 });
 
-// Запускаем прослушивание чатов после загрузки данных
+// Запуск после авторизации
 onAuthStateChanged(async (user) => {
   if (!user || !user.emailVerified) {
     window.location.href = 'index.html';
     return;
   }
   currentUser = user;
-  await loadAllUsers();
+  await loadAllUsers(false);
   await loadAllUsersForModal();
   listenForChats();
 });
