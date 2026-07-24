@@ -447,7 +447,7 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ (ОДИН РАЗ) ==========
+// ========== ЗАГРУЗКА СООБЩЕНИЙ (ИСПРАВЛЕННАЯ) ==========
 async function loadMessages() {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
@@ -463,14 +463,24 @@ async function loadMessages() {
       .orderBy('timestamp', 'asc')
       .get();
 
-    if (snapshot.empty) {
+    // Фильтруем видимые сообщения (не удалённые для текущего пользователя)
+    const visibleMessages = [];
+    snapshot.forEach(doc => {
+      const msg = doc.data();
+      if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) {
+        return; // пропускаем удалённые
+      }
+      visibleMessages.push({ id: doc.id, ...msg });
+    });
+
+    if (visibleMessages.length === 0) {
       messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
       return;
     }
 
+    // Загружаем отправителей для групповых чатов
     const senderIds = new Set();
-    snapshot.forEach(doc => {
-      const msg = doc.data();
+    visibleMessages.forEach(msg => {
       if (!msg.isSystem && selectedChat.isGroup && msg.senderId !== currentUser.uid) {
         senderIds.add(msg.senderId);
       }
@@ -490,21 +500,23 @@ async function loadMessages() {
       }
     }
 
+    // Отмечаем непрочитанные (если нужно)
     const batch = db.batch();
     let hasUnread = false;
-    snapshot.forEach(doc => {
-      const msg = doc.data();
+    visibleMessages.forEach(msg => {
       if (selectedChat.isGroup) {
         if (msg.senderId !== currentUser.uid && !msg.isSystem) {
           if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
             hasUnread = true;
-            batch.update(doc.ref, { readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+            batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), {
+              readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+            });
           }
         }
       } else {
         if (msg.receiverId === currentUser.uid && !msg.read) {
           hasUnread = true;
-          batch.update(doc.ref, { read: true });
+          batch.update(db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id), { read: true });
         }
       }
     });
@@ -522,10 +534,10 @@ async function loadMessages() {
       }
     }
 
+    // Строим HTML с разделителями дат только для видимых сообщений
     let html = '';
     let lastDate = '';
-    snapshot.forEach(doc => {
-      const msg = doc.data();
+    visibleMessages.forEach(msg => {
       const isMyMessage = msg.senderId === currentUser.uid;
       let time = '';
       let messageDate = '';
@@ -538,7 +550,6 @@ async function loadMessages() {
         html += `<div class="date-separator">${messageDate}</div>`;
         lastDate = messageDate;
       }
-      if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) return;
       if (msg.isSystem) {
         html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
         return;
@@ -550,9 +561,9 @@ async function loadMessages() {
           senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
         }
       }
-      const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${doc.id}', event)">⋯</button>` : '';
+      const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
       html += `
-        <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${doc.id}">
+        <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
           ${deleteOption}
           ${senderInfo}
           <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
@@ -981,9 +992,7 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    // Перезагружаем сообщения, чтобы убрать разделители дат
     await loadMessages();
-    // Обновляем превью чата локально
     await updateChatPreviewAfterDelete(currentChatId, false);
     hideMessageOptions();
   } catch (error) {
@@ -1002,9 +1011,7 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
-    // Перезагружаем сообщения, чтобы убрать разделители дат
     await loadMessages();
-    // Обновляем превью чата глобально (обновит Firestore)
     await updateChatPreviewAfterDelete(currentChatId, true);
     hideMessageOptions();
   } catch (error) {
