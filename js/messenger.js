@@ -197,6 +197,12 @@ function displayChats(chats) {
       </div>
     `;
   }).join('');
+
+  // Если есть активный поиск, применяем его заново (чтобы не сбрасывать)
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput && searchInput.value.trim() !== '') {
+    searchAll();
+  }
 }
 
 // ========== ПОИСК ==========
