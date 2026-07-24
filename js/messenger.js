@@ -135,7 +135,6 @@ function listenForChats() {
   if (!currentUser) return;
   if (unsubscribeChats) unsubscribeChats();
 
-  // Если кэш ещё не был показан, показываем его сейчас
   const cachedChats = localStorage.getItem(CACHE_CHATS_KEY);
   if (cachedChats) {
     try {
@@ -558,24 +557,6 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ФУНКЦИЯ ГЕНЕРАЦИИ HTML СООБЩЕНИЯ ==========
-function createMessageHTML(msg, msgId, isMyMessage, senderInfo) {
-  let time = '';
-  if (msg.timestamp) {
-    const date = msg.timestamp.toDate();
-    time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msgId}', event)">⋯</button>` : '';
-  return `
-    <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msgId}">
-      ${deleteOption}
-      ${senderInfo}
-      <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
-      <div class="message-time">${time}</div>
-    </div>
-  `;
-}
-
 // ========== ЗАГРУЗКА СООБЩЕНИЙ ==========
 async function loadMessages(showLoading = false) {
   if (!currentChatId || !selectedChat) return;
@@ -719,7 +700,15 @@ async function loadMessages(showLoading = false) {
           senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
         }
       }
-      html += createMessageHTML(msg, msg.id, isMyMessage, senderInfo);
+      const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msg.id}', event)">⋯</button>` : '';
+      html += `
+        <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msg.id}">
+          ${deleteOption}
+          ${senderInfo}
+          <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
+          <div class="message-time">${time}</div>
+        </div>
+      `;
     });
   }
 
@@ -730,96 +719,74 @@ async function loadMessages(showLoading = false) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
-  // Подписываемся на изменения в реальном времени
-  listenForMessages();
+  // Подписываемся только на новые сообщения (добавления), чтобы избежать дублирования
+  listenForNewMessages();
 }
 
-// ========== СЛУШАТЕЛЬ ИЗМЕНЕНИЙ СООБЩЕНИЙ ==========
-function listenForMessages() {
+// ========== СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ (ТОЛЬКО ДОБАВЛЕНИЯ) ==========
+function listenForNewMessages() {
   if (!currentChatId) return;
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
   }
+  const lastTimestamp = firebase.firestore.Timestamp.now();
 
   unsubscribeMessages = db.collection('chats').doc(currentChatId)
     .collection('messages')
+    .where('timestamp', '>', lastTimestamp)
     .orderBy('timestamp', 'asc')
-    .onSnapshot(snapshot => {
-      const messagesContainer = document.getElementById('messagesContainer');
-      if (!messagesContainer) return;
-
-      snapshot.docChanges().forEach(change => {
-        const msg = change.doc.data();
-        const msgId = change.doc.id;
-
-        // Проверяем удаление для текущего пользователя
-        if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) {
-          const el = document.getElementById(`msg-${msgId}`);
-          if (el) {
-            el.remove();
-            // Если сообщение удалено, возможно, нужно убрать пустой разделитель дат
-            // Для простоты оставляем, но можно пересчитать все разделители (дополнительная функция)
-          }
-          return;
-        }
-
+    .onSnapshot(async snapshot => {
+      snapshot.docChanges().forEach(async change => {
         if (change.type === 'added') {
+          const msg = change.doc.data();
+          const msgId = change.doc.id;
           if (document.getElementById(`msg-${msgId}`)) return;
 
-          // Определяем, нужно ли добавить разделитель даты
-          let lastDate = '';
-          const lastMsgEl = messagesContainer.lastElementChild;
-          if (lastMsgEl && lastMsgEl.classList.contains('date-separator')) {
-            lastDate = lastMsgEl.textContent;
-          } else if (lastMsgEl) {
-            // Если последний элемент — сообщение, можно попытаться найти дату в нём (сложно)
+          // Если мы в чате, сразу отмечаем как прочитанное
+          if (selectedChat.isGroup) {
+            if (msg.senderId !== currentUser.uid && !msg.isSystem) {
+              if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
+                await change.doc.ref.update({ readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+              }
+            }
+          } else {
+            if (msg.receiverId === currentUser.uid && !msg.read) {
+              await change.doc.ref.update({ read: true });
+            }
           }
 
-          let messageDate = '';
-          if (msg.timestamp) {
-            const date = msg.timestamp.toDate();
-            messageDate = date.toLocaleDateString();
-          }
-
-          if (messageDate && messageDate !== lastDate) {
-            const separator = document.createElement('div');
-            separator.className = 'date-separator';
-            separator.textContent = messageDate;
-            messagesContainer.appendChild(separator);
-          }
-
-          const isMyMessage = msg.senderId === currentUser.uid;
           let senderInfo = '';
-          if (selectedChat.isGroup && !isMyMessage && msg.senderId) {
-            const sender = getUserByIdSync(msg.senderId);
+          if (selectedChat.isGroup && msg.senderId !== currentUser.uid && msg.senderId) {
+            const sender = await getUserById(msg.senderId);
             if (sender) {
               senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
             }
           }
-
-          const html = createMessageHTML(msg, msgId, isMyMessage, senderInfo);
-          messagesContainer.insertAdjacentHTML('beforeend', html);
+          const isMyMessage = msg.senderId === currentUser.uid;
+          let time = '';
+          if (msg.timestamp) {
+            const date = msg.timestamp.toDate();
+            time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+          const deleteOption = isMyMessage ? `<button class="message-delete-btn" onclick="showMessageOptions('${msgId}', event)">⋯</button>` : '';
+          const messageHTML = `
+            <div class="message ${isMyMessage ? 'my-message' : 'other-message'}" id="msg-${msgId}">
+              ${deleteOption}
+              ${senderInfo}
+              <div class="message-content">${msg.text.replace(/\n/g, '<br>')}</div>
+              <div class="message-time">${time}</div>
+            </div>
+          `;
+          const messagesContainer = document.getElementById('messagesContainer');
+          messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
-
-        // Если сообщение изменилось (например, прочитано) — обновляем, но у нас только удаление
       });
-    }, error => console.error('Ошибка слушателя сообщений:', error));
+    }, error => console.error('Ошибка слушателя новых сообщений:', error));
 }
 
-// Синхронный аналог getUserById для слушателя (используем кэш)
-function getUserByIdSync(userId) {
-  if (userCache.has(userId)) return userCache.get(userId);
-  const found = allUsers.find(u => u.id === userId);
-  if (found) {
-    userCache.set(userId, found);
-    return found;
-  }
-  return null;
-}
-
-// ========== ОТПРАВКА СООБЩЕНИЯ (БЕЗ ПЕРЕЗАГРУЗКИ) ==========
+// ========== ОТПРАВКА СООБЩЕНИЯ (С ПЕРЕЗАГРУЗКОЙ БЕЗ ИНДИКАТОРА) ==========
 async function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
@@ -855,6 +822,8 @@ async function sendMessage() {
         lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
       });
 
+      // Загружаем сообщения без индикатора
+      await loadMessages(false);
       updateChatHeader(selectedChat);
       saveCache();
       return;
@@ -879,6 +848,8 @@ async function sendMessage() {
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    // Загружаем сообщения без индикатора
+    await loadMessages(false);
     saveCache();
 
   } catch (error) {
@@ -1159,7 +1130,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (БЕЗ ПЕРЕЗАГРУЗКИ) ==========
+// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (С ПЕРЕЗАГРУЗКОЙ) ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -1169,6 +1140,7 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
+    await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, false);
     saveCache();
     hideMessageOptions();
@@ -1188,6 +1160,7 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
+    await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, true);
     saveCache();
     hideMessageOptions();
