@@ -330,7 +330,7 @@ async function createPrivateChat(userId, nickname, tag) {
 }
 
 // ========== ВЫБОР ЧАТА ==========
-function selectChat(chat) {
+async function selectChat(chat) {
   if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null; }
   const messagesContainer = document.getElementById('messagesContainer');
   messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
@@ -368,16 +368,17 @@ function selectChat(chat) {
   chatHeader.innerHTML = headerContent;
   document.getElementById('messageInputArea').style.display = 'flex';
 
+  // Дожидаемся загрузки сообщений
+  await loadMessages();
+
   if (window.innerWidth <= 768) {
     enterChatMode();
   }
 
-  loadMessages();
   if (unreadCounts[chat.id] > 0) {
     markMessagesAsRead(chat.id);
   }
 }
-
 // ========== ОТМЕТКА ПРОЧИТАННЫХ (ТОЛЬКО ЛИЧНЫЕ) ==========
 async function markMessagesAsRead(chatId) {
   if (selectedChat && selectedChat.isGroup) return;
@@ -597,6 +598,7 @@ async function sendMessage() {
   const text = input.value.trim();
   if (!text || !currentChatId || !selectedChat) return;
   input.value = '';
+
   try {
     const messageData = {
       text: text,
@@ -610,11 +612,16 @@ async function sendMessage() {
       messageData.receiverId = otherUserId;
       messageData.read = false;
     }
+
     await db.collection('chats').doc(currentChatId).collection('messages').add(messageData);
     await db.collection('chats').doc(currentChatId).update({
       lastMessage: text,
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
+
+    // ✅ Мгновенно перезагружаем сообщения, чтобы новое появилось сразу
+    await loadMessages();
+
   } catch (error) {
     console.error('Ошибка отправки:', error);
     alert('Ошибка при отправке сообщения');
