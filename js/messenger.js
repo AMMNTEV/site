@@ -10,7 +10,7 @@ let isChatMode = false;
 let selectedMessageId = null;
 let unreadCounts = {};
 let isCreatingGroup = false;
-let isNewChatPending = false; // флаг, что мы открыли новый чат без создания
+let isNewChatPending = false;
 
 // ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ ==========
 async function loadAllUsers() {
@@ -70,7 +70,6 @@ function listenForChats() {
       if (snapshot.empty) {
         chatsList.innerHTML = '<div class="no-chats">У вас пока нет чатов. Найдите пользователя через поиск.</div>';
         allChats = [];
-        // Если мы в новом чате, но он ещё не создан, не обновляем список
         if (!isNewChatPending) {
           displayChats(allChats);
         }
@@ -124,7 +123,6 @@ function listenForChats() {
             lastMessageTime = createdAt;
           }
 
-          // Подсчёт непрочитанных
           let unreadCount = 0;
           if (chat.isGroup) {
             const messagesSnapshot = await db.collection('chats').doc(doc.id)
@@ -179,19 +177,14 @@ function listenForChats() {
           const timeB = b.lastMessageTime || b.createdAt || new Date(0);
           return timeB - timeA;
         });
-        // Если мы не в режиме нового чата, обновляем список
         if (!isNewChatPending) {
           displayChats(allChats);
         } else {
-          // Если мы в новом чате, но он уже появился в списке, переключаемся на него
-          // (это может случиться после отправки сообщения)
           const newChat = allChats.find(c => c.id === currentChatId);
           if (newChat && selectedChat && selectedChat.isNew) {
-            // Заменяем виртуальный чат на реальный
             selectedChat = newChat;
             selectedChat.isNew = false;
             isNewChatPending = false;
-            // Обновляем заголовок и загружаем сообщения
             updateChatHeader(selectedChat);
             loadMessages();
           }
@@ -219,7 +212,6 @@ function displayChats(chats) {
     `;
   }).join('');
 
-  // Если есть активный поиск, применяем его заново (чтобы не сбрасывать)
   const searchInput = document.getElementById('searchInput');
   if (searchInput && searchInput.value.trim() !== '') {
     searchAll();
@@ -334,7 +326,6 @@ async function createPrivateChat(userId, nickname, tag) {
       const chat = { id: existingChatId, ...existingChat, displayName: nickname, displayAvatar: tag };
       selectChat(chat);
     } else {
-      // НЕ СОЗДАЁМ чат в БД! Создаём виртуальный чат
       const virtualChat = {
         id: 'new_' + userId,
         participants: [currentUser.uid, userId],
@@ -345,7 +336,6 @@ async function createPrivateChat(userId, nickname, tag) {
         lastMessage: null,
         lastMessageTime: null
       };
-      // Устанавливаем флаг, что мы в новом чате
       isNewChatPending = true;
       selectChat(virtualChat);
     }
@@ -357,7 +347,6 @@ async function createPrivateChat(userId, nickname, tag) {
 
 // ========== ВЫБОР ЧАТА ==========
 async function selectChat(chat) {
-  // Отписываемся от старых сообщений
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
@@ -366,13 +355,10 @@ async function selectChat(chat) {
   const messagesContainer = document.getElementById('messagesContainer');
   const chatHeader = document.getElementById('chatHeader');
 
-  // Если это новый виртуальный чат
   if (chat.isNew) {
     selectedChat = chat;
     currentChatId = chat.id;
-    // Показываем заголовок
     updateChatHeader(chat);
-    // Показываем сообщение "Нет сообщений"
     messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
     document.getElementById('messageInputArea').style.display = 'flex';
     if (window.innerWidth <= 768) {
@@ -381,14 +367,12 @@ async function selectChat(chat) {
     return;
   }
 
-  // Обычный чат
   selectedChat = chat;
   currentChatId = chat.id;
   messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
   updateChatHeader(chat);
   document.getElementById('messageInputArea').style.display = 'flex';
 
-  // Загружаем сообщения
   await loadMessages();
 
   if (window.innerWidth <= 768) {
@@ -449,7 +433,6 @@ async function markMessagesAsRead(chatId) {
     });
     await batch.commit();
     unreadCounts[chatId] = 0;
-    // Обновляем UI (удаляем бейдж)
     const chatElement = document.querySelector(`.chat-item[onclick*='${chatId}']`);
     if (chatElement) {
       chatElement.classList.remove('has-unread');
@@ -507,7 +490,6 @@ async function loadMessages() {
       }
     }
 
-    // Отмечаем как прочитанные
     const batch = db.batch();
     let hasUnread = false;
     snapshot.forEach(doc => {
@@ -649,7 +631,7 @@ function listenForNewMessages() {
     }, error => console.error('Ошибка слушателя новых сообщений:', error));
 }
 
-// ========== ОТПРАВКА СООБЩЕНИЯ (С СОЗДАНИЕМ ЧАТА ПРИ НЕОБХОДИМОСТИ) ==========
+// ========== ОТПРАВКА СООБЩЕНИЯ ==========
 async function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
@@ -657,9 +639,7 @@ async function sendMessage() {
   input.value = '';
 
   try {
-    // Если это новый чат (ещё не создан в БД)
     if (selectedChat.isNew) {
-      // Создаём чат в Firestore
       const otherUserId = selectedChat.participants.find(id => id !== currentUser.uid);
       const newChatRef = await db.collection('chats').add({
         participants: [currentUser.uid, otherUserId],
@@ -669,13 +649,11 @@ async function sendMessage() {
         lastMessageTime: null
       });
       const chatId = newChatRef.id;
-      // Обновляем selectedChat на реальный (но пока без сообщений)
       selectedChat.id = chatId;
       selectedChat.isNew = false;
       currentChatId = chatId;
       isNewChatPending = false;
 
-      // Теперь отправляем сообщение в этот чат
       const messageData = {
         text: text,
         senderId: currentUser.uid,
@@ -689,14 +667,11 @@ async function sendMessage() {
         lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-      // Загружаем сообщения для этого чата
       await loadMessages();
-      // Обновляем заголовок (убираем виртуальный статус)
       updateChatHeader(selectedChat);
       return;
     }
 
-    // Обычный существующий чат
     const messageData = {
       text: text,
       senderId: currentUser.uid,
@@ -716,7 +691,6 @@ async function sendMessage() {
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Перезагружаем сообщения, чтобы новое появилось сразу
     await loadMessages();
 
   } catch (error) {
@@ -957,6 +931,7 @@ function hideMessageOptions() {
   document.getElementById('messageOptionsModal').style.display = 'none';
   selectedMessageId = null;
 }
+
 // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ ПРЕВЬЮ ЧАТА ==========
 async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   const snapshot = await db.collection('chats').doc(chatId)
@@ -996,6 +971,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
+// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (с перезагрузкой сообщений) ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -1005,8 +981,9 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    const msgElement = document.getElementById(`msg-${selectedMessageId}`);
-    if (msgElement) msgElement.remove();
+    // Перезагружаем сообщения, чтобы убрать разделители дат
+    await loadMessages();
+    // Обновляем превью чата локально
     await updateChatPreviewAfterDelete(currentChatId, false);
     hideMessageOptions();
   } catch (error) {
@@ -1025,8 +1002,9 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
-    const msgElement = document.getElementById(`msg-${selectedMessageId}`);
-    if (msgElement) msgElement.remove();
+    // Перезагружаем сообщения, чтобы убрать разделители дат
+    await loadMessages();
+    // Обновляем превью чата глобально (обновит Firestore)
     await updateChatPreviewAfterDelete(currentChatId, true);
     hideMessageOptions();
   } catch (error) {
