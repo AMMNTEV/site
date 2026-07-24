@@ -447,7 +447,7 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ (ИСПРАВЛЕННАЯ) ==========
+// ========== ЗАГРУЗКА СООБЩЕНИЙ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
 async function loadMessages() {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
@@ -458,10 +458,11 @@ async function loadMessages() {
   messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
 
   try {
+    // Принудительно загружаем с сервера, чтобы избежать кэширования
     const snapshot = await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .orderBy('timestamp', 'asc')
-      .get();
+      .get({ source: 'server' });
 
     // Фильтруем видимые сообщения (не удалённые для текущего пользователя)
     const visibleMessages = [];
@@ -534,9 +535,27 @@ async function loadMessages() {
       }
     }
 
-    // Строим HTML с разделителями дат только для видимых сообщений
+    // Строим HTML с разделителями дат ТОЛЬКО для не-системных сообщений,
+    // чтобы системные не создавали лишних разделителей, если нет других сообщений за день.
     let html = '';
     let lastDate = '';
+    // Сначала соберём все даты, которые есть у не-системных сообщений
+    const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
+    // Если нет не-системных сообщений, показываем только системные без разделителей
+    if (nonSystemMessages.length === 0) {
+      // Просто выводим системные сообщения подряд
+      visibleMessages.forEach(msg => {
+        if (msg.isSystem) {
+          html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
+        }
+      });
+      messagesContainer.innerHTML = html;
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      listenForNewMessages();
+      return;
+    }
+
+    // Иначе строим с разделителями, учитывая только не-системные для дат
     visibleMessages.forEach(msg => {
       const isMyMessage = msg.senderId === currentUser.uid;
       let time = '';
@@ -546,7 +565,9 @@ async function loadMessages() {
         time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         messageDate = date.toLocaleDateString();
       }
-      if (messageDate && messageDate !== lastDate) {
+      // Добавляем разделитель даты только если это не системное сообщение
+      // и дата изменилась по сравнению с предыдущей датой не-системного сообщения
+      if (!msg.isSystem && messageDate && messageDate !== lastDate) {
         html += `<div class="date-separator">${messageDate}</div>`;
         lastDate = messageDate;
       }
