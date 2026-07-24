@@ -186,7 +186,7 @@ function listenForChats() {
             selectedChat.isNew = false;
             isNewChatPending = false;
             updateChatHeader(selectedChat);
-            loadMessages();
+            loadMessages(false);
           }
         }
       });
@@ -373,7 +373,7 @@ async function selectChat(chat) {
   updateChatHeader(chat);
   document.getElementById('messageInputArea').style.display = 'flex';
 
-  await loadMessages();
+  await loadMessages(true); // showLoading = true
 
   if (window.innerWidth <= 768) {
     enterChatMode();
@@ -447,29 +447,29 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== ЗАГРУЗКА СООБЩЕНИЙ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
-async function loadMessages() {
+// ========== ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ МИГАНИЯ) ==========
+async function loadMessages(showLoading = false) {
   if (!currentChatId || !selectedChat) return;
   const messagesContainer = document.getElementById('messagesContainer');
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
   }
-  messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
+  if (showLoading) {
+    messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
+  }
 
   try {
-    // Принудительно загружаем с сервера, чтобы избежать кэширования
     const snapshot = await db.collection('chats').doc(currentChatId)
       .collection('messages')
       .orderBy('timestamp', 'asc')
       .get({ source: 'server' });
 
-    // Фильтруем видимые сообщения (не удалённые для текущего пользователя)
     const visibleMessages = [];
     snapshot.forEach(doc => {
       const msg = doc.data();
       if (msg.deletedFor && (msg.deletedFor.includes('everyone') || msg.deletedFor.includes(currentUser.uid))) {
-        return; // пропускаем удалённые
+        return;
       }
       visibleMessages.push({ id: doc.id, ...msg });
     });
@@ -501,7 +501,7 @@ async function loadMessages() {
       }
     }
 
-    // Отмечаем непрочитанные (если нужно)
+    // Отмечаем непрочитанные
     const batch = db.batch();
     let hasUnread = false;
     visibleMessages.forEach(msg => {
@@ -535,15 +535,13 @@ async function loadMessages() {
       }
     }
 
-    // Строим HTML с разделителями дат ТОЛЬКО для не-системных сообщений,
-    // чтобы системные не создавали лишних разделителей, если нет других сообщений за день.
+    // Строим HTML
     let html = '';
     let lastDate = '';
-    // Сначала соберём все даты, которые есть у не-системных сообщений
+    // Проверяем, есть ли не-системные сообщения
     const nonSystemMessages = visibleMessages.filter(msg => !msg.isSystem);
-    // Если нет не-системных сообщений, показываем только системные без разделителей
     if (nonSystemMessages.length === 0) {
-      // Просто выводим системные сообщения подряд
+      // Только системные – выводим их без разделителей
       visibleMessages.forEach(msg => {
         if (msg.isSystem) {
           html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
@@ -555,7 +553,7 @@ async function loadMessages() {
       return;
     }
 
-    // Иначе строим с разделителями, учитывая только не-системные для дат
+    // Есть не-системные – выводим с разделителями для них
     visibleMessages.forEach(msg => {
       const isMyMessage = msg.senderId === currentUser.uid;
       let time = '';
@@ -565,8 +563,6 @@ async function loadMessages() {
         time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         messageDate = date.toLocaleDateString();
       }
-      // Добавляем разделитель даты только если это не системное сообщение
-      // и дата изменилась по сравнению с предыдущей датой не-системного сообщения
       if (!msg.isSystem && messageDate && messageDate !== lastDate) {
         html += `<div class="date-separator">${messageDate}</div>`;
         lastDate = messageDate;
@@ -598,7 +594,12 @@ async function loadMessages() {
     listenForNewMessages();
   } catch (error) {
     console.error('Ошибка загрузки сообщений:', error);
-    messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
+    if (!showLoading) {
+      // Если была ошибка при обновлении, покажем её
+      messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
+    } else {
+      messagesContainer.innerHTML = '<div class="error">Ошибка загрузки сообщений</div>';
+    }
   }
 }
 
@@ -699,7 +700,7 @@ async function sendMessage() {
         lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-      await loadMessages();
+      await loadMessages(false);
       updateChatHeader(selectedChat);
       return;
     }
@@ -723,7 +724,7 @@ async function sendMessage() {
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    await loadMessages();
+    await loadMessages(false);
 
   } catch (error) {
     console.error('Ошибка отправки:', error);
@@ -1003,7 +1004,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (с перезагрузкой сообщений) ==========
+// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ (без мигания) ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -1013,7 +1014,7 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    await loadMessages();
+    await loadMessages(false); // обновляем без индикатора загрузки
     await updateChatPreviewAfterDelete(currentChatId, false);
     hideMessageOptions();
   } catch (error) {
@@ -1032,7 +1033,7 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
-    await loadMessages();
+    await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, true);
     hideMessageOptions();
   } catch (error) {
