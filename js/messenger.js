@@ -12,7 +12,6 @@ let unreadCounts = {};
 let isCreatingGroup = false;
 let isNewChatPending = false;
 let loadingTimer = null;
-let messageListenerInitialized = false; // флаг, чтобы не создавать дублирующие слушатели
 
 // Ключи для localStorage
 const CACHE_CHATS_KEY = 'messenger_chats_cache';
@@ -291,9 +290,8 @@ function listenForChats() {
             selectedChat.isNew = false;
             isNewChatPending = false;
             updateChatHeader(selectedChat);
-            // Подписываемся на сообщения нового чата (если ещё не подписаны)
             if (currentChatId) {
-              subscribeToMessages(currentChatId);
+              subscribeToMessages(currentChatId, true);
             }
           }
         }
@@ -459,7 +457,6 @@ async function createPrivateChat(userId, nickname, tag) {
 
 // ========== ВЫБОР ЧАТА ==========
 async function selectChat(chat) {
-  // Отписываемся от старого слушателя сообщений, если он был
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
@@ -486,8 +483,8 @@ async function selectChat(chat) {
   updateChatHeader(chat);
   document.getElementById('messageInputArea').style.display = 'flex';
 
-  // Подписываемся на сообщения этого чата (вместо однократной загрузки)
-  subscribeToMessages(chat.id);
+  // Подписываемся с принудительной прокруткой вниз
+  subscribeToMessages(chat.id, true);
 
   if (window.innerWidth <= 768) {
     enterChatMode();
@@ -563,9 +560,8 @@ async function markMessagesAsRead(chatId) {
   }
 }
 
-// ========== НОВАЯ ФУНКЦИЯ: ПОДПИСКА НА СООБЩЕНИЯ (реальный времени) ==========
-function subscribeToMessages(chatId) {
-  // Отписываемся от предыдущего слушателя
+// ========== ПОДПИСКА НА СООБЩЕНИЯ (с поддержкой прокрутки) ==========
+function subscribeToMessages(chatId, forceScroll = false) {
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
@@ -575,72 +571,71 @@ function subscribeToMessages(chatId) {
     .collection('messages')
     .orderBy('timestamp', 'asc');
 
+  // Флаг, чтобы знать, была ли уже первая загрузка
+  let isFirstLoad = true;
+
   unsubscribeMessages = messagesRef.onSnapshot(async (snapshot) => {
     const container = document.getElementById('messagesContainer');
     if (!container) return;
 
-    // Собираем все сообщения, не удалённые для текущего пользователя
+    // Собираем видимые сообщения (не удалённые для текущего пользователя)
     const visibleMessages = [];
     snapshot.forEach(doc => {
       const data = doc.data();
-      // Проверяем, не удалено ли сообщение для текущего пользователя
-      if (data.deletedFor && 
+      if (data.deletedFor &&
           (data.deletedFor.includes('everyone') || data.deletedFor.includes(currentUser.uid))) {
-        return; // пропускаем
+        return;
       }
       visibleMessages.push({ id: doc.id, ...data });
     });
 
-    // Если сообщений нет – показываем заглушку
-    if (visibleMessages.length === 0) {
-      container.innerHTML = '<div class="no-messages">Нет сообщений. Напишите что-нибудь!</div>';
-      return;
-    }
+    // Сохраняем текущую позицию прокрутки, если не принудительно и не первая загрузка
+    const oldScrollTop = container.scrollTop;
+    const isScrolledToBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
 
-    // Рендерим сообщения
+    // Рендерим
     renderMessages(visibleMessages, container);
 
-    // Отмечаем прочитанные (если нужно)
+    // Отмечаем прочитанные
     await markReadMessages(visibleMessages);
 
-    // Прокручиваем вниз, если пользователь не поднялся вверх
-    const isScrolledToBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-    if (isScrolledToBottom) {
-      container.scrollTop = container.scrollHeight;
+    // Решаем, прокручивать ли вниз
+    let shouldScrollDown = false;
+    if (forceScroll || isFirstLoad) {
+      shouldScrollDown = true;
+    } else {
+      // Если последнее сообщение отправил текущий пользователь – прокручиваем вниз
+      const lastMsg = visibleMessages[visibleMessages.length - 1];
+      if (lastMsg && lastMsg.senderId === currentUser.uid) {
+        shouldScrollDown = true;
+      }
+      // Если пользователь был внизу – тоже прокручиваем
+      else if (isScrolledToBottom) {
+        shouldScrollDown = true;
+      }
     }
+
+    if (shouldScrollDown) {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      // Восстанавливаем позицию, если не прокручиваем
+      container.scrollTop = oldScrollTop;
+    }
+
+    isFirstLoad = false;
 
   }, (error) => {
     console.error('Ошибка слушателя сообщений:', error);
   });
 }
 
-// ========== НОВАЯ ФУНКЦИЯ: РЕНДЕРИНГ СООБЩЕНИЙ ==========
+// ========== РЕНДЕРИНГ СООБЩЕНИЙ ==========
 function renderMessages(messages, container) {
-  // Кэш для отправителей (чтобы не грузить каждого заново)
-  const senderCache = {};
-
-  // Сначала соберём всех отправителей (для групповых чатов)
-  if (selectedChat && selectedChat.isGroup) {
-    const senderIds = new Set();
-    messages.forEach(msg => {
-      if (!msg.isSystem && msg.senderId !== currentUser.uid) {
-        senderIds.add(msg.senderId);
-      }
-    });
-    // Загружаем их асинхронно (можно сделать через Promise.all)
-    // Но для простоты будем загружать по мере необходимости, используя глобальный кэш
-    // В этой функции мы не можем использовать await, поэтому будем использовать синхронный кэш
-    // Вместо этого мы можем вызвать асинхронную загрузку отдельно и потом перерисовать,
-    // но для упрощения используем уже загруженных пользователей из allUsers или userCache.
-    // Если пользователя нет в кэше, покажем "?"
-  }
-
   let html = '';
   let lastDate = '';
 
   const nonSystemMessages = messages.filter(msg => !msg.isSystem);
   if (nonSystemMessages.length === 0) {
-    // Только системные сообщения
     messages.forEach(msg => {
       if (msg.isSystem) {
         html += `<div class="message system"><div class="message-content">${msg.text}</div></div>`;
@@ -657,7 +652,6 @@ function renderMessages(messages, container) {
         messageDate = date.toLocaleDateString();
       }
 
-      // Разделитель дат
       if (!msg.isSystem && messageDate && messageDate !== lastDate) {
         html += `<div class="date-separator">${messageDate}</div>`;
         lastDate = messageDate;
@@ -670,14 +664,10 @@ function renderMessages(messages, container) {
 
       let senderInfo = '';
       if (selectedChat.isGroup && !isMyMessage) {
-        // Получаем отправителя из глобального кэша
         const sender = allUsers.find(u => u.id === msg.senderId) || userCache.get(msg.senderId);
         if (sender) {
           senderInfo = `<div class="message-sender">${sender.nickname || '?'} ${sender.tag || ''}</div>`;
         } else {
-          // Если нет в кэше, загружаем асинхронно (но это может вызвать задержку)
-          // Для простоты оставим пустым, или можно инициировать загрузку отдельно
-          // В данном случае мы можем показать "?"
           senderInfo = `<div class="message-sender">?</div>`;
         }
       }
@@ -698,11 +688,10 @@ function renderMessages(messages, container) {
   container.innerHTML = html;
 }
 
-// ========== НОВАЯ ФУНКЦИЯ: ОТМЕТКА ПРОЧИТАННЫХ В РЕЖИМЕ РЕАЛЬНОГО ВРЕМЕНИ ==========
+// ========== ОТМЕТКА ПРОЧИТАННЫХ В РЕЖИМЕ РЕАЛЬНОГО ВРЕМЕНИ ==========
 async function markReadMessages(messages) {
   if (!currentChatId) return;
   if (selectedChat.isGroup) {
-    // Для групповых: отмечаем readBy для каждого сообщения, где мы ещё не читали
     const batch = db.batch();
     let hasChanges = false;
     messages.forEach(msg => {
@@ -716,11 +705,9 @@ async function markReadMessages(messages) {
     });
     if (hasChanges) {
       await batch.commit();
-      // Обновляем счётчик непрочитанных (если он был)
       if (unreadCounts[currentChatId] && unreadCounts[currentChatId] > 0) {
         unreadCounts[currentChatId] = 0;
         saveCache();
-        // Обновляем отображение в списке чатов
         const chatElement = document.querySelector(`.chat-item[onclick*='${currentChatId}']`);
         if (chatElement) {
           chatElement.classList.remove('has-unread');
@@ -733,7 +720,6 @@ async function markReadMessages(messages) {
       }
     }
   } else {
-    // Личный чат: отмечаем read = true
     const batch = db.batch();
     let hasChanges = false;
     messages.forEach(msg => {
@@ -762,12 +748,13 @@ async function markReadMessages(messages) {
   }
 }
 
-// ========== ОБНОВЛЕНИЕ ПРЕВЬЮ ПОСЛЕ УДАЛЕНИЯ ==========
+// ========== ОБНОВЛЕНИЕ ПРЕВЬЮ ПОСЛЕ УДАЛЕНИЯ (исправлен лимит) ==========
 async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
+  // Увеличиваем лимит до 50, чтобы точно найти последнее видимое сообщение
   const snapshot = await db.collection('chats').doc(chatId)
     .collection('messages')
     .orderBy('timestamp', 'desc')
-    .limit(20)
+    .limit(50)
     .get();
 
   let newLastMessage = null;
@@ -802,7 +789,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ОТПРАВКА СООБЩЕНИЯ (без перезагрузки, т.к. слушатель обновит) ==========
+// ========== ОТПРАВКА СООБЩЕНИЯ ==========
 async function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
@@ -838,8 +825,7 @@ async function sendMessage() {
         lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-      // Подписываемся на сообщения нового чата
-      subscribeToMessages(chatId);
+      subscribeToMessages(chatId, true);
       updateChatHeader(selectedChat);
       saveCache();
       return;
@@ -864,7 +850,7 @@ async function sendMessage() {
       lastMessageTime: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Не вызываем loadMessages, слушатель сам обновит
+    // Прокрутка выполняется в subscribeToMessages
 
   } catch (error) {
     console.error('Ошибка отправки:', error);
@@ -873,7 +859,7 @@ async function sendMessage() {
   }
 }
 
-// ========== УДАЛЕНИЕ СООБЩЕНИЙ (без перезагрузки, слушатель обновит) ==========
+// ========== УДАЛЕНИЕ СООБЩЕНИЙ ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -883,8 +869,6 @@ async function deleteMessageForMe() {
       .update({
         deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
       });
-    // Слушатель сам обновит сообщения, не нужно вызывать loadMessages
-    // Обновляем превью чата (список чатов)
     await updateChatPreviewAfterDelete(currentChatId, false);
     hideMessageOptions();
   } catch (error) {
@@ -903,7 +887,6 @@ async function deleteMessageForEveryone() {
       .update({
         deletedFor: ['everyone']
       });
-    // Слушатель сам обновит
     await updateChatPreviewAfterDelete(currentChatId, true);
     hideMessageOptions();
   } catch (error) {
@@ -928,7 +911,6 @@ function hideMessageOptions() {
   selectedMessageId = null;
 }
 
-// ========== ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ (МОБИЛЬНЫЕ) ==========
 function enterChatMode() {
   isChatMode = true;
   document.body.classList.add('chat-mode');
@@ -943,7 +925,6 @@ function exitChatMode() {
   document.getElementById('mobileMenuBtn').style.display = 'flex';
   const chatsSidebar = document.getElementById('chatsSidebar');
   if (chatsSidebar) chatsSidebar.style.display = 'flex';
-  // Отписываемся от слушателя сообщений
   if (unsubscribeMessages) {
     unsubscribeMessages();
     unsubscribeMessages = null;
