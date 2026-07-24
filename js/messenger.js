@@ -11,7 +11,6 @@ let selectedMessageId = null;
 let unreadCounts = {};
 let isCreatingGroup = false;
 let isNewChatPending = false;
-let isFirstLoad = true;
 
 // Ключи для localStorage
 const CACHE_CHATS_KEY = 'messenger_chats_cache';
@@ -21,18 +20,23 @@ const CACHE_UNREAD_KEY = 'messenger_unread_cache';
 // ========== СОХРАНЕНИЕ КЭША ==========
 function saveCache() {
   if (!currentUser) return;
-  localStorage.setItem(CACHE_CHATS_KEY, JSON.stringify({
-    uid: currentUser.uid,
-    data: allChats,
-    timestamp: Date.now()
-  }));
-  localStorage.setItem(CACHE_UNREAD_KEY, JSON.stringify(unreadCounts));
+  try {
+    localStorage.setItem(CACHE_CHATS_KEY, JSON.stringify({
+      uid: currentUser.uid,
+      data: allChats,
+      timestamp: Date.now()
+    }));
+    localStorage.setItem(CACHE_UNREAD_KEY, JSON.stringify(unreadCounts));
+  } catch (e) {
+    console.warn('Ошибка сохранения кэша:', e);
+  }
 }
 
 // ========== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ (с кэшем) ==========
 async function loadAllUsers(force = false) {
   if (!currentUser) return;
   try {
+    // Сначала пробуем кэш
     if (!force) {
       const cached = localStorage.getItem(CACHE_USERS_KEY);
       if (cached) {
@@ -96,7 +100,7 @@ function listenForChats() {
   if (!currentUser) return;
   if (unsubscribeChats) unsubscribeChats();
 
-  // Показываем кэш сразу
+  // Сразу показываем кэш (если есть)
   const cachedChats = localStorage.getItem(CACHE_CHATS_KEY);
   if (cachedChats) {
     try {
@@ -108,12 +112,11 @@ function listenForChats() {
           unreadCounts = JSON.parse(cachedUnread);
         }
         displayChats(allChats);
-        isFirstLoad = false;
       }
     } catch (e) { /* игнорируем */ }
   }
 
-  // Реальный слушатель
+  // Подписываемся на реальные изменения
   unsubscribeChats = db.collection('chats')
     .where('participants', 'array-contains', currentUser.uid)
     .onSnapshot(snapshot => {
@@ -232,6 +235,9 @@ function listenForChats() {
           return timeB - timeA;
         });
 
+        // Сохраняем кэш после обновления
+        saveCache();
+
         if (!isNewChatPending) {
           displayChats(allChats);
         } else {
@@ -268,7 +274,7 @@ function displayChats(chats) {
     `;
   }).join('');
 
-  // Сохраняем кэш после обновления списка
+  // Сохраняем кэш при каждой отрисовке
   saveCache();
 
   const searchInput = document.getElementById('searchInput');
@@ -494,8 +500,7 @@ async function markMessagesAsRead(chatId) {
     });
     await batch.commit();
     unreadCounts[chatId] = 0;
-    // Сохраняем кэш после обновления непрочитанных
-    saveCache();
+    saveCache(); // сохраняем кэш
     const chatElement = document.querySelector(`.chat-item[onclick*='${chatId}']`);
     if (chatElement) {
       chatElement.classList.remove('has-unread');
@@ -523,6 +528,7 @@ async function loadMessages(showLoading = false) {
     messagesContainer.innerHTML = '<div class="loading">Загрузка сообщений...</div>';
   }
 
+  // Сначала пробуем кэш Firestore, затем сервер
   let snapshot;
   try {
     snapshot = await db.collection('chats').doc(currentChatId)
@@ -777,6 +783,7 @@ async function sendMessage() {
 
       await loadMessages(false);
       updateChatHeader(selectedChat);
+      saveCache();
       return;
     }
 
@@ -800,6 +807,7 @@ async function sendMessage() {
     });
 
     await loadMessages(false);
+    saveCache();
 
   } catch (error) {
     console.error('Ошибка отправки:', error);
@@ -1079,7 +1087,7 @@ async function updateChatPreviewAfterDelete(chatId, isForEveryone = false) {
   }
 }
 
-// ========== ФУНКЦИИ УДАЛЕНИЯ ==========
+// ========== ОБНОВЛЁННЫЕ ФУНКЦИИ УДАЛЕНИЯ ==========
 async function deleteMessageForMe() {
   if (!selectedMessageId || !currentChatId) return;
   try {
@@ -1091,6 +1099,7 @@ async function deleteMessageForMe() {
       });
     await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, false);
+    saveCache();
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
@@ -1110,6 +1119,7 @@ async function deleteMessageForEveryone() {
       });
     await loadMessages(false);
     await updateChatPreviewAfterDelete(currentChatId, true);
+    saveCache();
     hideMessageOptions();
   } catch (error) {
     console.error('Ошибка удаления сообщения:', error);
@@ -1117,7 +1127,7 @@ async function deleteMessageForEveryone() {
   }
 }
 
-// ========== МОБИЛЬНЫЕ РЕЖИМЫ ==========
+// ========== ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ (МОБИЛЬНЫЕ) ==========
 function enterChatMode() {
   isChatMode = true;
   document.body.classList.add('chat-mode');
@@ -1156,7 +1166,7 @@ function toggleMobileMenu() {
   overlay.classList.toggle('active');
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
+// ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
 window.addEventListener('load', function() {
   if (window.innerWidth <= 768) {
     document.body.classList.remove('chat-mode');
@@ -1166,7 +1176,6 @@ window.addEventListener('load', function() {
     if (chatsSidebar) chatsSidebar.style.display = 'flex';
   }
 });
-
 window.addEventListener('resize', function() {
   if (window.innerWidth > 768) {
     document.body.classList.remove('chat-mode');
@@ -1180,14 +1189,14 @@ window.addEventListener('resize', function() {
   }
 });
 
-// Запуск после авторизации
+// Запускаем прослушивание чатов после загрузки данных
 onAuthStateChanged(async (user) => {
   if (!user || !user.emailVerified) {
     window.location.href = 'index.html';
     return;
   }
   currentUser = user;
-  await loadAllUsers(false);
+  await loadAllUsers(false); // загружаем пользователей с кэшем
   await loadAllUsersForModal();
-  listenForChats();
+  listenForChats(); // сразу показывает кэш, затем обновляется
 });
